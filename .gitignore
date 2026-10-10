@@ -1,0 +1,38 @@
+# ===== 依赖与构建产物 =====
+node_modules/
+dist/
+dist-ssr/
+
+# ===== 环境变量（含密钥，绝不提交） =====
+.env
+.env.local
+.env.*.local
+
+# ===== 日志与缓存 =====
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vite/
+.cache/
+
+# ===== 编辑器与系统 =====
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# ===== 大模型文件（几百 MB，Git 装不下） =====
+# 上游重建组产出的 .ply / glTF 样例模型默认不提交，
+# 以后团队确需共享时改用 Git LFS 或文件服务器。
+*.ply
+*.splat
+*.ksplat
+*.glb
+*.gltf
+
+# ===== 临时文件 =====
+*.tmp
+*.bak
