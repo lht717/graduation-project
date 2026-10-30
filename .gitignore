@@ -36,3 +36,10 @@ Thumbs.db
 # ===== 临时文件 =====
 *.tmp
 *.bak
+
+# ===== Python 缓存 =====
+__pycache__/
+*.pyc
+
+# ===== 超过 GitHub 100MB 限制的大文件 =====
+models/ufld_culane.onnx
