@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FusionLab · AI工程虚实融合实验平台</title>
+<style>
+:root{--blue:#2563eb;--blue2:#3b82f6;--cyan:#0ea5e9;--ink:#15243a;--muted:#718096;--line:#e3eaf3;--bg:#f6f9fd;--panel:#fff;--green:#10b981;--red:#ef4444;--orange:#f59e0b;--shadow:0 14px 36px rgba(31,67,114,.10)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg)}button,input,select{font:inherit}button{cursor:pointer}.hidden{display:none!important}
+.app{min-height:100vh}.topbar{height:68px;display:flex;align-items:center;justify-content:space-between;padding:0 5vw;background:rgba(255,255,255,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px);position:sticky;top:0;z-index:20}.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:20px}.brand-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(145deg,var(--blue),var(--cyan));position:relative;box-shadow:0 8px 18px rgba(37,99,235,.22)}.brand-mark:before,.brand-mark:after{content:"";position:absolute;background:#fff;border-radius:10px}.brand-mark:before{width:15px;height:4px;left:9px;top:10px;transform:rotate(-20deg)}.brand-mark:after{width:10px;height:4px;left:13px;top:19px;transform:rotate(20deg)}.brand span{color:var(--blue)}.nav{display:flex;align-items:center;gap:28px;color:#56667a;font-size:14px}.nav a{color:inherit;text-decoration:none}.btn{border:0;border-radius:9px;padding:10px 18px;font-weight:700}.btn-primary{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;box-shadow:0 8px 18px rgba(37,99,235,.18)}.btn-soft{background:#edf4ff;color:var(--blue)}.btn-outline{background:#fff;border:1px solid #cbd9ee;color:#315171}.btn-danger{background:#fff1f2;color:#d73746;border:1px solid #ffd6da}.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}.container{width:min(1180px,92vw);margin:0 auto}
+.hero{min-height:610px;display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:55px;padding:68px 0}.eyebrow{font-size:12px;font-weight:800;letter-spacing:1.7px;color:var(--blue);margin-bottom:18px}.hero h1{font-size:48px;line-height:1.16;margin:0 0 20px;letter-spacing:-1.2px}.hero h1 span{color:var(--blue)}.hero p{font-size:17px;line-height:1.85;color:#637287;margin:0;max-width:650px}.hero-actions{display:flex;gap:12px;margin-top:28px}.hero-note{margin-top:30px;display:flex;gap:24px;color:#78879a;font-size:13px}.hero-note b{color:#243b5a;margin-right:5px}.hero-visual{position:relative;height:420px}.glow{position:absolute;inset:40px;background:radial-gradient(circle,rgba(59,130,246,.28),transparent 67%);filter:blur(22px)}.demo-window{position:absolute;inset:22px 0 20px 20px;background:#fff;border:1px solid #dce7f5;border-radius:18px;box-shadow:0 25px 60px rgba(39,82,139,.18);overflow:hidden}.demo-bar{height:46px;border-bottom:1px solid #e9eef6;display:flex;align-items:center;gap:6px;padding:0 15px}.demo-bar i{width:8px;height:8px;border-radius:50%;background:#dbe4ef}.demo-bar b{margin-left:7px;font-size:11px;color:#6e7f94}.demo-canvas{height:285px;background:linear-gradient(180deg,#dbeafe 0 38%,#7e8995 39%,#303a46 100%);position:relative;overflow:hidden}.road{position:absolute;width:80%;height:120%;left:10%;top:38%;background:#46515c;clip-path:polygon(38% 0,62% 0,100% 100%,0 100%)}.road:after{content:"";position:absolute;width:5px;height:100%;background:repeating-linear-gradient(#fff 0 18px,transparent 18px 38px);left:50%;opacity:.65}.car{position:absolute;width:78px;height:42px;left:43%;bottom:42px;border-radius:18px 18px 10px 10px;background:linear-gradient(135deg,#2f6fee,#184eaa);box-shadow:0 10px 22px rgba(0,0,0,.25)}.car:before{content:"";position:absolute;width:42px;height:16px;left:18px;top:-8px;border-radius:12px 12px 2px 2px;background:#bfe5ff}.detect{position:absolute;right:16%;top:33%;width:70px;height:92px;border:2px solid #22c55e}.detect:before{content:"person 0.91";position:absolute;top:-20px;left:-2px;background:#22c55e;color:#08351e;font-size:9px;font-weight:800;padding:3px 5px}.demo-footer{display:grid;grid-template-columns:repeat(3,1fr);height:68px}.demo-footer div{padding:13px 15px;border-right:1px solid #edf1f5}.demo-footer span{display:block;font-size:10px;color:#91a0b3}.demo-footer b{font-size:15px}.floating{position:absolute;background:#fff;border:1px solid #dfe8f3;border-radius:11px;padding:10px 14px;box-shadow:var(--shadow);font-size:11px}.floating strong{display:block;color:#26415f}.floating small{color:#8493a5}.f1{right:-12px;top:70px}.f2{left:-10px;bottom:40px}
+.section{padding:70px 0}.section-head{text-align:center;max-width:780px;margin:0 auto 38px}.section-head h2{font-size:31px;margin:8px 0 12px}.section-head p{color:#748397;line-height:1.7}.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.feature{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;box-shadow:0 7px 20px rgba(36,70,112,.05)}.feature b{display:block;font-size:17px;margin-bottom:9px}.feature p{margin:0;color:#748297;line-height:1.7;font-size:14px}.feature-tag{display:inline-flex;margin-top:18px;background:#eff6ff;color:var(--blue);padding:5px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.modal-mask{position:fixed;inset:0;background:rgba(18,33,51,.43);display:grid;place-items:center;z-index:50;backdrop-filter:blur(3px)}.login-card{width:390px;background:#fff;border-radius:16px;box-shadow:0 30px 80px rgba(24,52,88,.24);padding:30px}.login-card h2{margin:16px 0 6px}.login-card p{margin:0 0 22px;color:#7b899b;font-size:13px}.field{margin:13px 0}.field label{display:block;font-size:12px;font-weight:700;color:#52677f;margin-bottom:7px}.field input{width:100%;height:43px;border:1px solid #dbe5f0;border-radius:9px;padding:0 12px;outline:none}.field input:focus{border-color:#8bb6f7;box-shadow:0 0 0 3px #edf5ff}.login-actions{display:flex;gap:8px;margin-top:18px}.login-actions .btn{flex:1}.demo-account{text-align:center;color:#98a4b3;font-size:11px;margin-top:14px}
+.dashboard-head{padding:42px 0 26px;display:flex;justify-content:space-between;align-items:end}.dashboard-head h1{font-size:30px;margin:0 0 7px}.dashboard-head p{margin:0;color:#78879b}.profile-pill{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#bfdbfe,#3b82f6);display:grid;place-items:center;color:#fff;font-weight:800}.profile-pill b{font-size:12px;display:block}.profile-pill span{font-size:10px;color:#8b99a9}.experiment-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;padding-bottom:70px}.exp-card{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 7px 24px rgba(35,68,110,.06);transition:.2s}.exp-card.active-card:hover{transform:translateY(-3px);box-shadow:0 15px 35px rgba(35,68,110,.10)}.exp-art{height:168px;position:relative;overflow:hidden;background:linear-gradient(145deg,#dbeafe,#eff8ff)}.exp-art.city:after{content:"";position:absolute;left:15%;right:15%;bottom:-20px;height:150px;background:#5f6d7d;clip-path:polygon(35% 0,65% 0,100% 100%,0 100%)}.exp-art.city:before{content:"";position:absolute;width:55px;height:30px;background:#2563eb;border-radius:14px 14px 7px 7px;left:43%;bottom:36px;z-index:2}.exp-badge{position:absolute;left:14px;top:14px;background:rgba(255,255,255,.9);color:#1d5dbc;border:1px solid #d6e7ff;border-radius:7px;padding:5px 8px;font-size:10px;font-weight:800;z-index:3}.exp-body{padding:18px}.exp-body h3{margin:0 0 7px;font-size:17px}.exp-body p{margin:0;color:#8290a2;font-size:12px;line-height:1.6;min-height:38px}.exp-meta{display:flex;gap:7px;margin:15px 0}.chip{background:#f3f6fa;color:#65768a;border-radius:6px;padding:5px 7px;font-size:10px}.coming{opacity:.68}.coming .exp-art{filter:grayscale(.45)}
+/* Workspace */
+.workspace{height:100vh;display:flex;flex-direction:column;background:#f3f7fb}.work-header{height:62px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 18px;flex:0 0 auto}.work-left,.work-right{display:flex;align-items:center;gap:11px}.back-btn{width:34px;height:34px;border:1px solid #e0e7ef;border-radius:9px;background:#fff;color:#52667c;font-size:18px}.work-title{border-left:1px solid #e4eaf1;padding-left:13px}.work-title b{font-size:12px;display:block}.work-title span{font-size:9px;color:#91a0b2}.connection{font-size:10px;color:#6c7d90;background:#f6f8fb;border:1px solid #e4e9ef;padding:7px 9px;border-radius:8px}.connection i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#aeb8c4;margin-right:5px}.connection.ok{color:#16865f;background:#eefbf6;border-color:#d1f2e3}.connection.ok i{background:var(--green);box-shadow:0 0 0 3px rgba(16,185,129,.12)}.work-body{flex:1;min-height:0;display:grid;grid-template-columns:286px 1fr}.sidebar{background:#fff;border-right:1px solid var(--line);padding:17px 15px;overflow:auto}.side-head{font-size:13px;font-weight:800;margin-bottom:13px}.block{border-top:1px solid #edf1f5;padding:15px 0}.block:first-of-type{border-top:0}.block label{display:block;font-size:10px;font-weight:800;color:#53677e;margin-bottom:8px}.mode-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;background:#f2f5f9;padding:3px;border-radius:8px}.mode-tabs button{border:0;background:transparent;padding:8px 3px;border-radius:6px;font-size:10px;color:#8290a0}.mode-tabs button.active{background:#fff;color:var(--blue);font-weight:800;box-shadow:0 2px 8px rgba(44,74,109,.08)}.mode-tabs button:disabled{cursor:not-allowed;opacity:.42}.small-note{font-size:9px;color:#97a3b0;line-height:1.6;margin-top:7px}.model-box{border:1px solid #e0e8f2;background:#f8fbff;border-radius:9px;padding:10px}.model-line{display:flex;align-items:center;justify-content:space-between;margin:5px 0}.model-line b{font-size:10px}.model-line span{font-size:8px;color:#1c7b58;background:#e8f8f1;padding:3px 5px;border-radius:4px}.select{width:100%;height:39px;border:1px solid #dbe4ef;border-radius:8px;background:#fff;padding:0 10px;color:#455a72;font-size:10px;outline:none}.model-upload{display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px}.model-file{width:100%;font-size:9px;color:#63758a}.model-name{width:100%;height:34px;border:1px solid #dbe4ef;border-radius:7px;padding:0 8px;font-size:9px;margin:6px 0}.model-status{font-size:9px;min-height:16px;margin:6px 0;color:#7b899a}.model-status.ok{color:#16865f}.model-status.err{color:#d64545}.model-library{max-height:102px;overflow:auto;border:1px solid #e8edf3;border-radius:7px;background:#fff;margin:7px 0}.model-item{display:flex;justify-content:space-between;gap:8px;padding:6px 7px;border-bottom:1px solid #f0f3f7;font-size:8.5px}.model-item:last-child{border-bottom:0}.model-item b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.model-item span{color:#8a98a8;white-space:nowrap}.model-slot{margin-top:8px}.model-slot label{margin-bottom:4px!important;font-size:8.5px!important;color:#7a899a!important}.model-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.model-actions .btn{padding:8px 6px;font-size:9px}.side-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.side-actions .btn{padding:9px 7px;font-size:10px}.wide{grid-column:1/-1}.backend-box{border-radius:9px;background:#0f1b28;color:#bcd0e4;padding:10px;font:9px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace}.backend-box b{color:#7dd3fc}
+.edge-device-list{display:flex;flex-direction:column;gap:7px}.edge-device{width:100%;border:1px solid #dfe7f1;background:#fff;border-radius:9px;padding:9px 10px;text-align:left;display:grid;grid-template-columns:1fr auto;gap:4px 10px;transition:.16s}.edge-device:hover{border-color:#a9c7f2;background:#f8fbff}.edge-device.selected{border-color:#5d95ea;background:#eef6ff;box-shadow:0 0 0 2px rgba(37,99,235,.08)}.edge-device-name{font-size:10px;font-weight:800;color:#30445d}.edge-device-meta{font-size:8px;color:#8a99aa;grid-column:1/2}.device-state{grid-column:2/3;grid-row:1/3;align-self:center;display:inline-flex;align-items:center;gap:5px;font-size:8px;font-weight:800;padding:4px 6px;border-radius:999px}.device-state i{width:6px;height:6px;border-radius:50%;display:inline-block}.device-state.online{color:#16865f;background:#eaf9f3}.device-state.online i{background:#10b981}.device-state.busy{color:#9a6a00;background:#fff6dd}.device-state.busy i{background:#f59e0b}.device-state.offline{color:#8a96a5;background:#f0f3f6}.device-state.offline i{background:#9ca3af}.edge-connect-row{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:8px}.edge-conn-status{min-height:32px;border:1px solid #e1e7ee;background:#f7f9fb;border-radius:8px;display:flex;align-items:center;padding:0 9px;font-size:9px;color:#728196}.edge-conn-status i{width:7px;height:7px;border-radius:50%;background:#aeb8c4;margin-right:6px}.edge-conn-status.connecting{color:#855f00;background:#fff8e7;border-color:#f6dda5}.edge-conn-status.connecting i{background:#f59e0b}.edge-conn-status.ok{color:#16865f;background:#eefbf6;border-color:#d1f2e3}.edge-conn-status.ok i{background:#10b981}.edge-conn-status.fail{color:#c23b46;background:#fff1f2;border-color:#ffd6da}.edge-conn-status.fail i{background:#ef4444}.edge-connect-row .btn{padding:8px 12px;font-size:9px}.mainlab{padding:12px;overflow:auto}.video-grid{display:grid;grid-template-columns:1.35fr .65fr;gap:10px}.panel{background:#fff;border:1px solid #e1e8f0;border-radius:12px;overflow:hidden}.panel-head{height:42px;border-bottom:1px solid #e8edf3;display:flex;align-items:center;justify-content:space-between;padding:0 12px}.panel-head b{font-size:10px}.panel-head span{font-size:8px;color:#8998aa}.canvas-wrap{position:relative;background:#101820;aspect-ratio:4/3;display:grid;place-items:center;overflow:hidden}.canvas-wrap canvas{width:100%;height:100%;display:block;object-fit:cover}.empty-state{position:absolute;inset:0;display:grid;place-items:center;text-align:center;background:linear-gradient(145deg,#111d29,#1b2b3c);color:#a7b8c9;font-size:11px}.empty-state b{display:block;color:#e0edf9;margin-bottom:5px}.live-label{position:absolute;left:9px;top:9px;background:rgba(8,20,31,.73);color:#fff;padding:5px 7px;border-radius:5px;font-size:8px}.live-label i{display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af;margin-right:4px}.live-label.on i{background:#22c55e}.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin:10px 0}.metric{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:11px 12px}.metric span{font-size:8px;color:#8a99aa}.metric b{display:block;font-size:19px;margin:5px 0 1px}.metric small{font-size:8px;color:#9aa6b4}.console{background:#0f1924;border-radius:11px;overflow:hidden;color:#cbd9e6;border:1px solid #22303e}.console-head{height:36px;background:#172330;border-bottom:1px solid #243646;display:flex;align-items:center;justify-content:space-between;padding:0 11px}.console-head b{font-size:9px;color:#dbe8f4}.console-head span{font-size:8px;color:#7890a8}.console-body{height:126px;overflow:auto;padding:9px 11px;font:9px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace}.log-time{color:#60788f;margin-right:7px}.log-ok{color:#72d8ae}.log-warn{color:#f1bd76}.log-err{color:#fb8a91}.log-normal{color:#bdd0e2}
+@media(max-width:1050px){.hero{grid-template-columns:1fr}.hero-visual{display:none}.feature-grid,.experiment-grid{grid-template-columns:1fr 1fr}.work-body{grid-template-columns:245px 1fr}.video-grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(3,1fr)}}
+
+/* V0.6.2 visual layout: AI result first, camera + driving telemetry compact stack */
+.visual-layout{display:grid;grid-template-columns:minmax(0,1.38fr) minmax(310px,.62fr);gap:10px;align-items:start}
+.side-visual-stack{display:flex;flex-direction:column;gap:10px;min-width:0}
+.visual-layout>.panel .canvas-wrap{aspect-ratio:16/9}
+.side-visual-stack>.panel .canvas-wrap{aspect-ratio:4/3}
+.compact-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.compact-metrics .metric{padding:9px 10px;min-width:0}
+.compact-metrics .metric span{font-size:8px}
+.compact-metrics .metric b{font-size:16px;margin:4px 0 0}
+.compact-metrics .metric>small{display:none}
+.compact-metrics .metric:last-child{grid-column:1/-1}
+.mode-tabs button:not(:disabled){cursor:pointer}
+@media(max-width:980px){.visual-layout{grid-template-columns:1fr}.side-visual-stack{display:grid;grid-template-columns:1fr}.compact-metrics{grid-template-columns:repeat(5,1fr)}.compact-metrics .metric:last-child{grid-column:auto}}
+@media(max-width:720px){.compact-metrics{grid-template-columns:repeat(2,1fr)}.compact-metrics .metric:last-child{grid-column:1/-1}}
+</style>
+<script src="/static/config.js"></script>
+</head>
+<body>
+<div id="app" class="app">
+  <section id="landingView">
+    <header class="topbar"><div class="brand"><div class="brand-mark"></div>Fusion<span>Lab</span></div><nav class="nav"><a href="#capabilities">平台能力</a><a href="#workflow">工作方式</a><button class="btn btn-outline" id="openLogin">登录平台</button></nav></header>
+    <main class="container">
+      <section class="hero">
+        <div><div class="eyebrow">AI ENGINEERING · SIMULATION & PHYSICAL</div><h1>让 AI 算法在<span>工程场景</span><br>完成感知与控制闭环</h1><p>FusionLab 面向人工智能工程实践，将 CARLA 仿真、AI 视觉算法、边缘计算与浏览器实验工作台整合在一起，支持从虚拟仿真逐步扩展到虚实结合实验。</p><div class="hero-actions"><button class="btn btn-primary" id="heroEnter">进入平台</button><button class="btn btn-soft" onclick="document.getElementById('capabilities').scrollIntoView({behavior:'smooth'})">了解能力</button></div><div class="hero-note"><span><b>CARLA</b>虚拟场景</span><span><b>UFLD + YOLO</b>AI感知</span><span><b>WebSocket</b>实时视频</span></div></div>
+        <div class="hero-visual"><div class="glow"></div><div class="demo-window"><div class="demo-bar"><i></i><i></i><i></i><b>FusionLab / AutoDrive-01</b></div><div class="demo-canvas"><div class="road"></div><div class="car"></div><div class="detect"></div></div><div class="demo-footer"><div><span>模式</span><b>双模式</b></div><div><span>仿真引擎</span><b>CARLA</b></div><div><span>AI感知</span><b>ONNX</b></div></div></div><div class="floating f1"><strong>实时仿真画面</strong><small>CARLA rear camera</small></div><div class="floating f2"><strong>AI识别画面</strong><small>UFLD + YOLO</small></div></div>
+      </section>
+      <section id="capabilities" class="section"><div class="section-head"><div class="eyebrow">CORE CAPABILITIES</div><h2>从虚拟仿真走向虚实结合</h2><p>复用 autodrivesystem_v0.5 已经跑通的 CARLA 与算法能力，并在同一实验工作台中保留虚实结合入口，为后续接入真实边缘计算设备做好界面与流程准备。</p></div><div class="feature-grid"><div class="feature"><b>CARLA 实时仿真</b><p>浏览器实时显示第三人称仿真画面，并可从网页完成车辆创建、启动、停止和销毁。</p><span class="feature-tag">Simulation</span></div><div class="feature"><b>AI 感知结果</b><p>前视摄像头通过 UFLD 与 YOLO 完成车道线和目标检测，处理结果实时推送到实验页面。</p><span class="feature-tag">Perception</span></div><div class="feature"><b>统一实验工作台</b><p>运行配置、双路画面、车辆状态和运行日志集中在一个页面，形成产品化实验入口。</p><span class="feature-tag">Workspace</span></div></div></section>
+      <section id="workflow" class="section"><div class="section-head"><div class="eyebrow">WORKFLOW</div><h2>当前实验运行链路</h2><p>CARLA 虚拟摄像头 → B机本地 ONNX 推理 → WebSocket → 浏览器显示；后续在虚实结合模式下，将把算法执行节点切换到真实边缘计算设备。</p></div></section>
+    </main>
+  </section>
+
+  <section id="dashboardView" class="hidden">
+    <header class="topbar"><div class="brand"><div class="brand-mark"></div>Fusion<span>Lab</span></div><div class="profile-pill"><div class="avatar">U</div><div><b>平台使用者</b><span>Engineering Workspace</span></div></div></header>
+    <main class="container"><div class="dashboard-head"><div><div class="eyebrow">MY EXPERIMENTS</div><h1>我的实验</h1><p>选择一个实验进入工作台。实验工作台支持虚拟仿真与虚实结合两种运行模式。</p></div></div>
+      <div class="experiment-grid">
+        <article class="exp-card active-card"><div class="exp-art city"><span class="exp-badge">可运行 · 双模式</span></div><div class="exp-body"><h3>智能汽车视觉感知实验</h3><p>CARLA 城市道路 · UFLD 车道线检测 · YOLO 目标检测 · 自动驾驶状态监控</p><div class="exp-meta"><span class="chip">CARLA</span><span class="chip">ONNX Runtime</span><span class="chip">WebSocket</span></div><button class="btn btn-primary" id="openExperiment">进入实验</button></div></article>
+        <article class="exp-card coming"><div class="exp-art"><span class="exp-badge">规划中</span></div><div class="exp-body"><h3>仓储 AGV 实验</h3><p>将在后续场景适配阶段开放。</p><div class="exp-meta"><span class="chip">AGV</span><span class="chip">Warehouse</span></div><button class="btn btn-outline" disabled>暂未开放</button></div></article>
+        <article class="exp-card coming"><div class="exp-art"><span class="exp-badge">规划中</span></div><div class="exp-body"><h3>巡检机器人实验</h3><p>将在机器人仿真适配完成后开放。</p><div class="exp-meta"><span class="chip">Robot</span><span class="chip">Patrol</span></div><button class="btn btn-outline" disabled>暂未开放</button></div></article>
+      </div>
+    </main>
+  </section>
+
+  <section id="experimentView" class="workspace hidden">
+    <header class="work-header"><div class="work-left"><button class="back-btn" id="backDashboard">←</button><div class="brand"><div class="brand-mark"></div>Fusion<span>Lab</span></div><div class="work-title"><b>智能汽车视觉感知实验</b><span id="workModeLabel">CARLA · 虚拟仿真</span></div></div><div class="work-right"><div class="connection" id="connectionPill"><i></i><span id="connectionText">后端未连接</span></div></div></header>
+    <div class="work-body">
+      <aside class="sidebar">
+        <div class="side-head">实验配置</div>
+        <div class="block"><label>01 · 运行模式</label><div class="mode-tabs"><button id="simModeBtn" class="active">虚拟仿真</button><button id="hybridModeBtn">虚实结合</button></div><div class="small-note" id="modeNote">CARLA 与本地 AI 算法在当前后端节点完成实验闭环。</div></div>
+        <div class="block"><label>02 · AI 模型库</label><div class="model-box">
+          <input id="modelFileInput" class="model-file" type="file" accept=".onnx" />
+          <input id="modelSaveName" class="model-name" type="text" placeholder="上传后保存的文件名，例如 model_v2.onnx" />
+          <div class="model-actions"><button id="uploadModelBtn" class="btn btn-soft" disabled>上传模型</button><button id="refreshModelsBtn" class="btn btn-outline">刷新列表</button></div>
+          <div id="modelStatus" class="model-status">模型将保存至服务器 models 文件夹。</div>
+          <div id="modelLibrary" class="model-library"><div class="model-item"><b>正在读取模型库...</b><span>--</span></div></div>
+          <div class="model-slot"><label>车道线检测模型（UFLD兼容）</label><select id="ufldModelSelect" class="select"><option value="">未选择</option></select></div>
+          <div class="model-slot"><label>目标检测模型（YOLO兼容）</label><select id="yoloModelSelect" class="select"><option value="">未选择</option></select></div>
+          <button id="loadModelsBtn" class="btn btn-primary" style="width:100%;margin-top:8px">加载所选模型</button>
+        </div><div class="small-note">V0.6.4 支持上传、查看并切换 ONNX。由于车道线与目标检测的预/后处理不同，请为两个算法槽位选择兼容模型；切换模型前需先停止实验运行。</div></div>
+        <div class="block hidden" id="edgeDeviceBlock"><label>03 · 边缘主板</label><div class="edge-device-list" id="edgeDeviceList"></div><div class="edge-connect-row"><div class="edge-conn-status" id="edgeConnStatus"><i></i><span>未连接设备</span></div><button id="connectEdgeBtn" class="btn btn-primary" disabled>连接</button></div><div class="small-note">虚实结合模式下选择边缘主板。V0.6.4 保留设备选择与连接交互，真实 Edge Agent 通信将在下一阶段接入。</div></div>
+        <div class="block"><label>04 · CARLA 车辆</label><select id="vehicleSelect" class="select" disabled><option>等待 CARLA 后端...</option></select></div>
+        <div class="block"><label>05 · 实验控制</label><div class="side-actions"><button id="createBtn" class="btn btn-primary wide" disabled>创建车辆</button><button id="startBtn" class="btn btn-soft" disabled>开始行驶</button><button id="stopBtn" class="btn btn-outline" disabled>停止行驶</button><button id="destroyBtn" class="btn btn-danger wide" disabled>销毁车辆</button></div></div>
+        <div class="block"><label>运行节点</label><div class="backend-box"><div><b>MODE</b> <span id="runtimeMode">SIMULATION</span></div><div><b>WS</b> <span id="wsAddr">--</span></div><div><b>CARLA</b> localhost:2000 @ backend</div><div><b>TM</b> port 9000</div></div></div>
+      </aside>
+      <main class="mainlab">
+        <div class="visual-layout">
+          <section class="panel"><div class="panel-head"><div><b>AI 感知识别</b></div><span>前视摄像头 · UFLD + YOLO</span></div><div class="canvas-wrap"><canvas id="frontCanvas" width="800" height="600"></canvas><div class="empty-state" id="frontEmpty"><div><b>等待视觉数据</b>后端开始推送后显示车道线与目标检测结果</div></div><div class="live-label" id="frontLive"><i></i>PERCEPTION</div></div></section>
+          <div class="side-visual-stack">
+            <section class="panel"><div class="panel-head"><div><b>CARLA 摄像头画面</b></div><span>第三人称 · Rear Camera</span></div><div class="canvas-wrap"><canvas id="rearCanvas" width="800" height="600"></canvas><div class="empty-state" id="rearEmpty"><div><b>等待实验启动</b>创建车辆并开始行驶后显示 CARLA 实时画面</div></div><div class="live-label" id="rearLive"><i></i>CAMERA</div></div></section>
+            <div class="compact-metrics"><div class="metric"><span>车辆速度</span><b><em id="speedVal">0</em> <small>km/h</small></b><small>CARLA vehicle state</small></div><div class="metric"><span>加速度</span><b><em id="accelVal">0.00</em> <small>m/s²</small></b><small>实时状态</small></div><div class="metric"><span>油门</span><b><em id="throttleVal">0</em> <small>%</small></b><small>Autopilot control</small></div><div class="metric"><span>车辆朝向</span><b><em id="yawVal">0.0</em> <small>°</small></b><small>World yaw</small></div><div class="metric"><span>前视流帧率</span><b><em id="fpsVal">0</em> <small>FPS</small></b><small>浏览器实测</small></div></div>
+          </div>
+        </div>
+        <section class="console"><div class="console-head"><b>Runtime Console</b><span id="consoleModeText">实验运行日志</span></div><div class="console-body" id="consoleBody"></div></section>
+      </main>
+    </div>
+  </section>
+
+  <div id="loginModal" class="modal-mask hidden"><div class="login-card"><div class="brand"><div class="brand-mark"></div>Fusion<span>Lab</span></div><h2>登录平台</h2><p>第一版原型暂采用演示登录，不接入正式用户系统。</p><div class="field"><label>用户名</label><input id="username" value="demo" /></div><div class="field"><label>密码</label><input type="password" value="fusionlab" /></div><div class="login-actions"><button class="btn btn-outline" id="cancelLogin">取消</button><button class="btn btn-primary" id="loginBtn">登录</button></div><div class="demo-account">Demo：任意账号均可进入</div></div></div>
+</div>
+<script>
+const $=s=>document.querySelector(s);const landing=$('#landingView'),dash=$('#dashboardView'),exp=$('#experimentView'),modal=$('#loginModal');
+function show(v){landing.classList.add('hidden');dash.classList.add('hidden');exp.classList.add('hidden');v.classList.remove('hidden')}
+function openLogin(){modal.classList.remove('hidden')}$('#openLogin').onclick=openLogin;$('#heroEnter').onclick=openLogin;$('#cancelLogin').onclick=()=>modal.classList.add('hidden');$('#loginBtn').onclick=()=>{modal.classList.add('hidden');show(dash)};
+$('#openExperiment').onclick=()=>{show(exp);connectBackend();refreshModels()};$('#backDashboard').onclick=()=>{disconnectBackend();show(dash)};
+
+let modelFiles=[];
+function fmtBytes(n){if(n<1024)return n+' B';if(n<1024*1024)return (n/1024).toFixed(1)+' KB';return (n/1024/1024).toFixed(1)+' MB'}
+function setModelStatus(text,type=''){const el=$('#modelStatus');el.textContent=text;el.className='model-status'+(type?' '+type:'')}
+function fillModelSelect(el,activeName){
+  const current=activeName||el.value;
+  el.innerHTML='<option value="">未选择</option>';
+  modelFiles.forEach(m=>{const o=document.createElement('option');o.value=m.name;o.textContent=m.name;el.appendChild(o)});
+  if(current && modelFiles.some(m=>m.name===current))el.value=current;
+}
+async function refreshModels(){
+  try{
+const r=await fetch('http://127.0.0.1:8080/api/models',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);    const data=await r.json();modelFiles=data.models||[];
+    const lib=$('#modelLibrary');lib.innerHTML='';
+    if(!modelFiles.length){lib.innerHTML='<div class="model-item"><b>models 文件夹暂无 ONNX</b><span>0</span></div>'}
+    modelFiles.forEach(m=>{const row=document.createElement('div');row.className='model-item';const roles=(m.active_roles||[]).map(x=>x.toUpperCase()).join(' / ');row.innerHTML=`<b title="${m.name}">${m.name}</b><span>${roles?roles+' · ':''}${fmtBytes(m.size||0)}</span>`;lib.appendChild(row)});
+    fillModelSelect($('#ufldModelSelect'),data.active&&data.active.ufld);
+    fillModelSelect($('#yoloModelSelect'),data.active&&data.active.yolo);
+    const a=data.active||{};setModelStatus(`当前：UFLD ${a.ufld||'未加载'} · YOLO ${a.yolo||'未加载'}`,'ok');
+  }catch(e){setModelStatus('读取模型库失败：'+e.message,'err');log('模型库读取失败：'+e.message,'err')}
+}
+$('#modelFileInput').onchange=()=>{
+  const f=$('#modelFileInput').files[0];
+  $('#uploadModelBtn').disabled=!f;
+  if(f){$('#modelSaveName').value=f.name;setModelStatus(`已选择 ${f.name} · ${fmtBytes(f.size)}`)}
+};
+$('#refreshModelsBtn').onclick=refreshModels;
+$('#uploadModelBtn').onclick=async()=>{
+  const f=$('#modelFileInput').files[0];let name=$('#modelSaveName').value.trim();
+  if(!f){setModelStatus('请先选择 ONNX 文件','err');return}
+  if(!name.toLowerCase().endsWith('.onnx')){setModelStatus('保存文件名必须以 .onnx 结尾','err');return}
+  if(modelFiles.some(m=>m.name.toLowerCase()===name.toLowerCase())){setModelStatus('文件名已存在，请修改上传模型的文件名','err');return}
+  $('#uploadModelBtn').disabled=true;setModelStatus(`正在上传 ${name}...`);log(`开始上传模型：${name}`);
+  try{
+const r=await fetch('http://127.0.0.1:8080/api/models/upload?filename='+encodeURIComponent(name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});    if(!r.ok)throw new Error(data.detail||('HTTP '+r.status));
+    setModelStatus(`上传成功：${data.name} · ${fmtBytes(data.size||0)}`,'ok');log(`模型上传成功：${data.name}`,'ok');
+    $('#modelFileInput').value='';$('#modelSaveName').value='';
+    await refreshModels();
+  }catch(e){setModelStatus(e.message,'err');log('模型上传失败：'+e.message,'err')}
+  finally{$('#uploadModelBtn').disabled=!$('#modelFileInput').files[0]}
+};
+$('#loadModelsBtn').onclick=async()=>{
+  const ufld=$('#ufldModelSelect').value,yolo=$('#yoloModelSelect').value;
+  if(!ufld&&!yolo){setModelStatus('请至少选择一个模型','err');return}
+  $('#loadModelsBtn').disabled=true;setModelStatus('正在加载所选模型...');log(`请求加载模型：UFLD=${ufld||'保持当前'}，YOLO=${yolo||'保持当前'}`);
+  try{
+const r=await fetch('http://127.0.0.1:8080/api/models/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ufld_model:ufld||null,yolo_model:yolo||null})});    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.detail||('HTTP '+r.status));
+    const a=data.active||{};setModelStatus(`加载成功：UFLD ${a.ufld||'未加载'} · YOLO ${a.yolo||'未加载'}`,'ok');log('模型切换成功','ok');await refreshModels();
+  }catch(e){setModelStatus('加载失败：'+e.message,'err');log('模型加载失败：'+e.message,'err')}
+  finally{$('#loadModelsBtn').disabled=false}
+};
+
+let experimentMode='simulation';
+const edgeDevices=[
+  {id:'edge-01',name:'Jetson Nano',detail:'NVIDIA · 4GB · Edge-01',status:'online',statusText:'在线 · 空闲'},
+  {id:'edge-02',name:'Jetson Orin NX',detail:'NVIDIA · 16GB · Edge-02',status:'online',statusText:'在线 · 空闲'},
+  {id:'edge-03',name:'Ascend 310B',detail:'Huawei Ascend · Edge-03',status:'busy',statusText:'在线 · 使用中'},
+  {id:'edge-04',name:'RK3588',detail:'ARM NPU · Edge-04',status:'offline',statusText:'离线'}
+];
+let selectedEdgeId=null,connectedEdgeId=null,edgeConnectTimer=null;
+function renderEdgeDevices(){
+  const list=$('#edgeDeviceList');
+  list.innerHTML='';
+  edgeDevices.forEach(d=>{
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='edge-device'+(selectedEdgeId===d.id?' selected':'');
+    btn.innerHTML=`<div class="edge-device-name">${d.name}</div><div class="edge-device-meta">${d.detail}</div><span class="device-state ${d.status}"><i></i>${d.statusText}</span>`;
+    btn.onclick=()=>{selectedEdgeId=d.id;renderEdgeDevices();$('#connectEdgeBtn').disabled=false;setEdgeConn('idle',`已选择 ${d.name}`);log(`已选择边缘主板：${d.name} · ${d.statusText}`)};
+    list.appendChild(btn);
+  });
+}
+function setEdgeConn(state,text){
+  const el=$('#edgeConnStatus');
+  el.className='edge-conn-status'+(state==='ok'?' ok':state==='fail'?' fail':state==='connecting'?' connecting':'');
+  el.querySelector('span').textContent=text;
+}
+function resetEdgeConnection(){
+  if(edgeConnectTimer){clearTimeout(edgeConnectTimer);edgeConnectTimer=null}
+  connectedEdgeId=null;
+  selectedEdgeId=null;
+  $('#connectEdgeBtn').disabled=true;
+  $('#connectEdgeBtn').textContent='连接';
+  setEdgeConn('idle','未连接设备');
+  renderEdgeDevices();
+}
+renderEdgeDevices();
+function setExperimentMode(mode){
+  experimentMode=mode;
+  const sim=mode==='simulation';
+  $('#simModeBtn').classList.toggle('active',sim);
+  $('#hybridModeBtn').classList.toggle('active',!sim);
+  $('#runtimeMode').textContent=sim?'SIMULATION':'HYBRID';
+  $('#workModeLabel').textContent=sim?'CARLA · 虚拟仿真':'CARLA · 虚实结合';
+  $('#consoleModeText').textContent=sim?'虚拟仿真运行日志':'虚实结合运行日志';
+  $('#edgeDeviceBlock').classList.toggle('hidden',sim);
+  if(sim){
+    $('#modeNote').textContent='CARLA 与本地 AI 算法在当前后端节点完成实验闭环。';
+    resetEdgeConnection();
+    log('已切换至虚拟仿真模式');
+  }else{
+    $('#modeNote').textContent='请选择边缘主板并建立连接；实验画面与控制区保持一致。';
+    renderEdgeDevices();
+    log('已切换至虚实结合模式，请选择边缘主板','warn');
+  }
+}
+$('#simModeBtn').onclick=()=>setExperimentMode('simulation');
+$('#hybridModeBtn').onclick=()=>setExperimentMode('hybrid');
+$('#connectEdgeBtn').onclick=()=>{
+  const dev=edgeDevices.find(d=>d.id===selectedEdgeId);
+  if(!dev){setEdgeConn('fail','请先选择设备');return}
+  if(edgeConnectTimer)clearTimeout(edgeConnectTimer);
+  $('#connectEdgeBtn').disabled=true;
+  $('#connectEdgeBtn').textContent='连接中';
+  setEdgeConn('connecting',`正在连接 ${dev.name}...`);
+  log(`正在连接边缘主板：${dev.name}...`);
+  edgeConnectTimer=setTimeout(()=>{
+    edgeConnectTimer=null;
+    if(dev.status==='offline'){
+      connectedEdgeId=null;setEdgeConn('fail',`${dev.name} 连接失败 · 设备离线`);log(`${dev.name} 连接失败：设备离线`,'err');
+    }else if(dev.status==='busy'){
+      connectedEdgeId=null;setEdgeConn('fail',`${dev.name} 连接失败 · 设备使用中`);log(`${dev.name} 连接失败：设备正在使用`,'warn');
+    }else{
+      connectedEdgeId=dev.id;setEdgeConn('ok',`${dev.name} 已连接`);log(`${dev.name} 连接成功`,'ok');
+    }
+    $('#connectEdgeBtn').disabled=false;
+    $('#connectEdgeBtn').textContent=connectedEdgeId===dev.id?'重连':'连接';
+  },650);
+};
+
+let ws=null,vehicleCreated=false,driving=false,frontFrames=0,fpsTimer=null;
+const frontCanvas=$('#frontCanvas'),rearCanvas=$('#rearCanvas'),frontCtx=frontCanvas.getContext('2d'),rearCtx=rearCanvas.getContext('2d');
+const frontImg=new Image(),rearImg=new Image();
+function timestamp(){return new Date().toLocaleTimeString('zh-CN',{hour12:false})}
+function log(msg,type='normal'){const c=$('#consoleBody');const d=document.createElement('div');d.className='log-'+type;d.innerHTML=`<span class="log-time">${timestamp()}</span>${msg}`;c.appendChild(d);c.scrollTop=c.scrollHeight}
+function resolveWsUrl(){const cfg=window.FUSIONLAB_CONFIG||{};if(cfg.wsUrl)return cfg.wsUrl;const p=location.protocol==='https:'?'wss':'ws';return `${p}://${location.host}/ws`}
+function setConn(ok,text){const el=$('#connectionPill');el.classList.toggle('ok',ok);$('#connectionText').textContent=text|| (ok?'CARLA 后端已连接':'后端未连接')}
+function updateButtons(){const select=$('#vehicleSelect');$('#createBtn').disabled=!ws||ws.readyState!==1||vehicleCreated||select.disabled;$('#startBtn').disabled=!vehicleCreated||driving;$('#stopBtn').disabled=!driving;$('#destroyBtn').disabled=!vehicleCreated}
+function send(action,extra={}){if(ws&&ws.readyState===1)ws.send(JSON.stringify({action,...extra}))}
+function connectBackend(){
+    if(ws&&[0,1].includes(ws.readyState))return;
+    
+    // 👇 修改这里：直接写死后端的 WebSocket 地址
+    const url='ws://127.0.0.1:8080/ws';
+    
+    $('#wsAddr').textContent=url;
+    log(`Connecting WebSocket: ${url}`);
+    try{
+        ws=new WebSocket(url);
+        ws.binaryType='arraybuffer'
+    }catch(e){
+        log('WebSocket 创建失败：'+e.message,'err');
+        return
+    } 
+    ws.onopen=()=>{
+        setConn(true);
+        log('WebSocket connected','ok');
+        send('get_vehicle_blueprints');
+        fpsTimer=setInterval(()=>{
+            $('#fpsVal').textContent=frontFrames;
+            frontFrames=0
+        },1000)
+    };
+    // ... 后面的代码保持不变
+ ws.onclose=()=>{setConn(false);log('WebSocket disconnected','warn');vehicleCreated=false;driving=false;updateButtons();if(fpsTimer){clearInterval(fpsTimer);fpsTimer=null}};
+ ws.onerror=()=>{setConn(false,'连接异常');log('WebSocket error：请确认 FastAPI 与 CARLA 已启动','err')};
+ ws.onmessage=handleMessage;
+}
+function disconnectBackend(){if(ws){try{if(vehicleCreated)send('destroy_vehicle')}catch(e){};ws.close();ws=null}if(fpsTimer){clearInterval(fpsTimer);fpsTimer=null}}
+function handleMessage(event){if(typeof event.data==='string'){try{const msg=JSON.parse(event.data);if(msg.type==='blueprints'){const s=$('#vehicleSelect');s.innerHTML='';msg.data.forEach(bp=>{const o=document.createElement('option');o.value=bp.id;o.textContent=bp.name;s.appendChild(o)});s.disabled=false;log(`已获取 ${msg.data.length} 个 CARLA 车辆蓝图`,'ok');updateButtons()}else if(msg.type==='vehicle_created'){vehicleCreated=true;log(`车辆创建成功 · actor_id=${msg.vehicle_id}`,'ok');updateButtons()}else if(msg.type==='status'){if(msg.message==='driving_started'){driving=true;log('自动驾驶已启动','ok');$('#rearLive').classList.add('on');$('#frontLive').classList.add('on')}else if(msg.message==='driving_stopped'){driving=false;log('自动驾驶已停止','warn')}else if(msg.message==='vehicle_destroyed'){vehicleCreated=false;driving=false;log('车辆与传感器已销毁','warn');$('#rearLive').classList.remove('on');$('#frontLive').classList.remove('on');$('#rearEmpty').classList.remove('hidden');$('#frontEmpty').classList.remove('hidden')}if(msg.data)updateTelemetry(msg.data);updateButtons()}else if(msg.type==='error'){log('后端错误：'+msg.message,'err')}}catch(e){log('消息解析失败：'+e.message,'err')}}else if(event.data instanceof ArrayBuffer){const data=new Uint8Array(event.data);if(data.length<2)return;const prefix=data[0],bytes=data.slice(1),blob=new Blob([bytes],{type:'image/jpeg'}),url=URL.createObjectURL(blob);if(prefix===0){frontFrames++;frontImg.onload=()=>{frontCtx.drawImage(frontImg,0,0,frontCanvas.width,frontCanvas.height);URL.revokeObjectURL(url);$('#frontEmpty').classList.add('hidden')};frontImg.onerror=()=>URL.revokeObjectURL(url);frontImg.src=url}else if(prefix===1){rearImg.onload=()=>{rearCtx.drawImage(rearImg,0,0,rearCanvas.width,rearCanvas.height);URL.revokeObjectURL(url);$('#rearEmpty').classList.add('hidden')};rearImg.onerror=()=>URL.revokeObjectURL(url);rearImg.src=url}}}
+function updateTelemetry(d={}){$('#speedVal').textContent=Number(d.speed||0).toFixed(0);$('#accelVal').textContent=Number(d.acceleration||0).toFixed(2);$('#throttleVal').textContent=(Number(d.throttle||0)*100).toFixed(0);$('#yawVal').textContent=Number(d.yaw||0).toFixed(1)}
+$('#createBtn').onclick=()=>{send('create_vehicle',{blueprint_id:$('#vehicleSelect').value});log('正在创建 CARLA 车辆...')};$('#startBtn').onclick=()=>{send('start_driving');log('发送开始行驶指令...')};$('#stopBtn').onclick=()=>{send('stop_driving');log('发送停止指令...')};$('#destroyBtn').onclick=()=>{send('destroy_vehicle');log('发送销毁车辆指令...')};
+updateButtons();setConn(false);log('FusionLab experiment workspace ready');
+window.addEventListener('beforeunload',()=>{try{if(ws)ws.close()}catch(e){}});
+</script>
+</body>
+</html>
