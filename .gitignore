@@ -40,6 +40,3 @@ Thumbs.db
 # ===== Python 缓存 =====
 __pycache__/
 *.pyc
-
-# ===== 超过 GitHub 100MB 限制的大文件 =====
-models/ufld_culane.onnx
