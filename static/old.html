@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人工智能工程技术-自动驾驶虚仿系统</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #1e1e2f;
+            font-family: 'Segoe UI', 'Roboto', sans-serif;
+            color: #e0e0e0;
+        }
+        .header {
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        .header .connection-status {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: #dc3545;
+            box-shadow: 0 0 8px rgba(220,53,69,0.5);
+        }
+        .header .connection-status.connected {
+            background-color: #28a745;
+            box-shadow: 0 0 8px rgba(40,167,69,0.5);
+        }
+        .card {
+            background-color: #2a2a3d;
+            border: 1px solid #3a3a4d;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .card-header {
+            background-color: transparent;
+            border-bottom: 1px solid #3a3a4d;
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+        }
+        .card-header h5 {
+            margin: 0;
+            font-weight: 600;
+            color: #ffffff;
+        }
+        .camera-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+        .camera-box {
+            background-color: #2a2a3d;
+            border: 1px solid #3a3a4d;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            padding: 10px;
+        }
+        .camera-box canvas {
+            width: 100%;
+            height: auto;
+            background-color: #000;
+            border-radius: 10px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        .dashboard .metric {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 20px 10px;
+            text-align: center;
+            transition: background 0.2s;
+        }
+        .dashboard .metric:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        .dashboard .value {
+            font-size: 2.8rem;
+            font-weight: 700;
+            color: #4fc3f7;
+            text-shadow: 0 0 10px rgba(79,195,247,0.3);
+        }
+        .dashboard .label {
+            font-size: 0.95rem;
+            color: #b0b0b0;
+            margin-top: 5px;
+            letter-spacing: 0.5px;
+        }
+        .btn {
+            border-radius: 8px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        .btn i {
+            margin-right: 6px;
+        }
+        .form-select {
+            background-color: #1e1e2f;
+            color: #e0e0e0;
+            border: 1px solid #3a3a4d;
+            border-radius: 8px;
+        }
+        .form-select:focus {
+            border-color: #4fc3f7;
+            box-shadow: 0 0 0 0.2rem rgba(79,195,247,0.25);
+        }
+        .text-muted {
+            color: #888888 !important;
+        }
+        @media (max-width: 768px) {
+            .camera-grid {
+                grid-template-columns: 1fr;
+            }
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            .dashboard .value {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="bi bi-car-front-fill me-2"></i>人工智能工程技术-自动驾驶虚仿系统</h1>
+                <div class="d-flex align-items-center">
+                    <span class="connection-status" id="connectionStatus"></span>
+                    <span class="ms-2 text-light" id="connectionText">未连接</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 控制面板 -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-sliders me-2"></i>控制面板</h5>
+            </div>
+            <div class="row align-items-end g-3">
+                <div class="col-md-4">
+                    <label for="vehicleSelect" class="form-label">选择车辆类型</label>
+                    <select id="vehicleSelect" class="form-select" disabled>
+                        <option>加载中...</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button id="createBtn" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-circle"></i>创建车辆
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <button id="startBtn" class="btn btn-success w-100" disabled>
+                        <i class="bi bi-play-fill"></i>开始行驶
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <button id="stopBtn" class="btn btn-warning w-100" disabled>
+                        <i class="bi bi-stop-fill"></i>停止行驶
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <button id="destroyBtn" class="btn btn-danger w-100" disabled>
+                        <i class="bi bi-trash"></i>销毁车辆
+                    </button>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <small class="text-muted"><i class="bi bi-info-circle me-1"></i>提示：创建车辆后，点击“开始行驶”将启用自动驾驶，同时摄像头和仪表盘开始工作。</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- 摄像头画面 -->
+        <div class="camera-grid">
+            <div class="camera-box">
+                <h5 class="mb-3"><i class="bi bi-camera me-2"></i>前方视角（算法输入）</h5>
+                <canvas id="frontCanvas" width="800" height="600"></canvas>
+            </div>
+            <div class="camera-box">
+                <h5 class="mb-3"><i class="bi bi-camera-reels me-2"></i>后上方视角（车辆监控）</h5>
+                <canvas id="rearCanvas" width="800" height="600"></canvas>
+            </div>
+        </div>
+
+        <!-- 仪表盘 -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-speedometer2 me-2"></i>车辆仪表盘</h5>
+            </div>
+            <div class="row g-3">
+                <div class="col-3 metric">
+                    <div class="value" id="speedValue">0</div>
+                    <div class="label">速度 (km/h)</div>
+                </div>
+                <div class="col-3 metric">
+                    <div class="value" id="accelValue">0</div>
+                    <div class="label">加速度 (m/s²)</div>
+                </div>
+                <div class="col-3 metric">
+                    <div class="value" id="throttleValue">0</div>
+                    <div class="label">油门</div>
+                </div>
+                <div class="col-3 metric">
+                    <div class="value" id="yawValue">0</div>
+                    <div class="label">朝向 (°)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // WebSocket 连接
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const ws = new WebSocket(`${wsProtocol}://${location.host}/ws`);
+        ws.binaryType = 'arraybuffer';
+
+        const frontCanvas = document.getElementById('frontCanvas');
+        const rearCanvas = document.getElementById('rearCanvas');
+        const frontCtx = frontCanvas.getContext('2d');
+        const rearCtx = rearCanvas.getContext('2d');
+        const frontImg = new Image();
+        const rearImg = new Image();
+
+        // 状态变量
+        let vehicleCreated = false;
+        let driving = false;
+
+        // UI 元素
+        const vehicleSelect = document.getElementById('vehicleSelect');
+        const createBtn = document.getElementById('createBtn');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const destroyBtn = document.getElementById('destroyBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectionText = document.getElementById('connectionText');
+
+        // 更新按钮状态
+        function updateButtons() {
+            createBtn.disabled = vehicleCreated || vehicleSelect.disabled;
+            startBtn.disabled = !vehicleCreated || driving;
+            stopBtn.disabled = !driving;
+            destroyBtn.disabled = !vehicleCreated;
+        }
+
+        // 更新连接状态
+        function setConnection(connected) {
+            if (connected) {
+                connectionStatus.classList.add('connected');
+                connectionText.textContent = '已连接';
+            } else {
+                connectionStatus.classList.remove('connected');
+                connectionText.textContent = '未连接';
+            }
+        }
+
+        // WebSocket 事件
+        ws.onopen = () => {
+            setConnection(true);
+            // 连接后请求车辆蓝图列表
+            ws.send(JSON.stringify({ action: 'get_vehicle_blueprints' }));
+        };
+
+        ws.onclose = () => {
+            setConnection(false);
+        };
+
+        ws.onerror = () => {
+            setConnection(false);
+        };
+
+        ws.onmessage = (event) => {
+            if (typeof event.data === 'string') {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'blueprints') {
+                    // 填充车辆选择下拉框
+                    vehicleSelect.innerHTML = '';
+                    msg.data.forEach(bp => {
+                        const option = document.createElement('option');
+                        option.value = bp.id;
+                        option.textContent = bp.name;
+                        vehicleSelect.appendChild(option);
+                    });
+                    vehicleSelect.disabled = false;
+                    updateButtons();
+                } else if (msg.type === 'vehicle_created') {
+                    vehicleCreated = true;
+                    updateButtons();
+                    console.log('车辆创建成功，ID:', msg.vehicle_id);
+                } else if (msg.type === 'status') {
+                    console.log('状态:', msg.message);
+                    if (msg.message === 'driving_started') {
+                        driving = true;
+                        updateButtons();
+                    } else if (msg.message === 'driving_stopped') {
+                        driving = false;
+                        updateButtons();
+                    } else if (msg.message === 'vehicle_destroyed') {
+                        vehicleCreated = false;
+                        driving = false;
+                        updateButtons();
+                    }
+                } else if (msg.type === 'error') {
+                    alert('错误: ' + msg.message);
+                }
+            } else if (event.data instanceof ArrayBuffer) {
+                // 二进制数据：第一个字节为摄像头标识
+                const data = new Uint8Array(event.data);
+                const prefix = data[0]; // 0: front, 1: rear
+                const imageBytes = data.slice(1);
+                const blob = new Blob([imageBytes], { type: 'image/jpeg' });
+                const url = URL.createObjectURL(blob);
+
+                if (prefix === 0) {
+                    frontImg.onload = () => {
+                        frontCtx.drawImage(frontImg, 0, 0, frontCanvas.width, frontCanvas.height);
+                        URL.revokeObjectURL(url);
+                    };
+                    frontImg.src = url;
+                } else if (prefix === 1) {
+                    rearImg.onload = () => {
+                        rearCtx.drawImage(rearImg, 0, 0, rearCanvas.width, rearCanvas.height);
+                        URL.revokeObjectURL(url);
+                    };
+                    rearImg.src = url;
+                }
+            }
+        };
+
+        // 按钮事件
+        createBtn.onclick = () => {
+            const selectedBlueprint = vehicleSelect.value;
+            ws.send(JSON.stringify({ action: 'create_vehicle', blueprint_id: selectedBlueprint }));
+        };
+
+        startBtn.onclick = () => {
+            ws.send(JSON.stringify({ action: 'start_driving' }));
+        };
+
+        stopBtn.onclick = () => {
+            ws.send(JSON.stringify({ action: 'stop_driving' }));
+        };
+
+        destroyBtn.onclick = () => {
+            ws.send(JSON.stringify({ action: 'destroy_vehicle' }));
+        };
+
+        // 初始状态
+        updateButtons();
+        setConnection(false);
+    </script>
+</body>
+</html>
