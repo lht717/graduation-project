@@ -21,6 +21,12 @@ const loadModelsDisabled = ref(false);
 const frontHasFrame = ref(false);
 const rearHasFrame = ref(false);
 
+const recordName = ref("");
+
+async function onSaveRecord() {
+  await exp.saveExperimentRecord(recordName.value);
+}
+
 const pendingObjectUrls = new Set();
 
 /* ---------------- 帧绘制（对应原版 drawImageFrame） ---------------- */
@@ -160,6 +166,7 @@ onUnmounted(() => {
         <div class="block" id="edgeDeviceBlock" :class="{ hidden: exp.isSimulation }"><label>03 · 边缘主板</label><div class="edge-connect-row"><div class="edge-conn-status" id="edgeConnStatus"><i></i><span>未接入设备服务</span></div><button id="connectEdgeBtn" class="btn btn-primary" disabled>连接</button></div><div class="small-note">边缘设备服务接口尚未接入。</div></div>
         <div class="block"><label>04 · CARLA 车辆</label><select id="vehicleSelect" v-model="exp.vehicleSelection" class="select" :disabled="!exp.canSelectVehicle"><option v-if="!exp.blueprints.length" value="">{{ exp.vehicleHint }}</option><option v-for="blueprint in exp.blueprints" :key="blueprint.id" :value="blueprint.id">{{ blueprint.name }}</option></select></div>
         <div class="block"><label>05 · 实验控制</label><div class="side-actions"><button id="createBtn" class="btn btn-primary wide" :disabled="!exp.canCreate" @click="exp.createVehicle()">创建车辆</button><button id="startBtn" class="btn btn-soft" :disabled="!exp.canStart" @click="exp.startDriving()">开始行驶</button><button id="stopBtn" class="btn btn-outline" :disabled="!exp.canStop" @click="exp.stopDriving()">停止行驶</button><button id="destroyBtn" class="btn btn-danger wide" :disabled="!exp.canDestroy" @click="exp.destroyVehicle()">销毁车辆</button></div></div>
+        <div class="block"><label>06 · 实验记录</label><div class="side-actions"><input id="recordNameInput" v-model="recordName" class="select" maxlength="128" placeholder="实验名称（留空自动生成）" style="margin-bottom:8px"><button id="saveRecordBtn" class="btn btn-primary wide" type="button" :disabled="exp.recordSaving" @click="onSaveRecord">{{ exp.recordSaving ? "保存中…" : "结束实验并保存记录" }}</button></div><div class="small-note" id="recordStatus">{{ exp.recordStatus || "实验结束后点击保存，记录会写入数据库并显示在管理端「实验管理」。" }}</div></div>
         <div class="block"><label>运行节点</label><div class="backend-box"><div><b>MODE</b> <span id="runtimeMode">{{ exp.runtimeMode }}</span></div><div><b>WS</b> <span id="wsAddr">{{ exp.wsAddr }}</span></div><div><b>CARLA</b> localhost:2000 @ backend</div><div><b>TM</b> port 9000</div></div></div>
       </aside>
       <main class="mainlab">

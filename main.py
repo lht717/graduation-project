@@ -711,6 +711,35 @@ async def admin_create_experiment(request: Request):
     return {"experiment": _experiment_public(row), "message": "实验数据已新增"}
 
 
+@app.post("/api/experiments")
+async def save_experiment_record(request: Request):
+    """实验结束后保存运行记录：登录用户（普通用户/管理员）均可写入。
+
+    请求体字段：name、duration_seconds、speed、acceleration、throttle、yaw、front_fps。
+    name 为空时按「用户名 + 时间」自动生成。
+    """
+    user = _current_user(request)
+    body = await request.json()
+    values = _experiment_values(body)
+    if not values["name"]:
+        values["name"] = f"{user.get('display_name') or user['username']} 的实验 {_now_iso()[:19].replace('T', ' ')}"
+    values["is_active"] = 1
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            placeholders = ", ".join(["%s"] * len(EXPERIMENT_COLUMNS))
+            cur.execute(
+                f"INSERT INTO experiments ({', '.join(EXPERIMENT_COLUMNS)}) VALUES ({placeholders})",
+                tuple(values[column] for column in EXPERIMENT_COLUMNS),
+            )
+            exp_id = cur.lastrowid
+            row = _experiment_by_id(cur, exp_id)
+        conn.commit()
+    finally:
+        conn.close()
+    return {"experiment": _experiment_public(row), "message": "实验记录已保存"}
+
+
 @app.put("/api/admin/experiments/{exp_id}")
 async def admin_update_experiment(exp_id: int, request: Request):
     _admin_only(request)

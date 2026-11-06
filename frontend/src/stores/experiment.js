@@ -15,6 +15,9 @@ export const useExperimentStore = defineStore("experiment", () => {
   let fpsTimer = null;
   let frameCount = 0;
   let frameHandler = null;
+  // 实验计时：driving_started 起算，driving_stopped 累加
+  let drivingStartedAt = null;
+  let accumulatedSeconds = 0;
 
   const connected = ref(false);
   const connectionText = ref("后端未连接");
@@ -56,6 +59,10 @@ export const useExperimentStore = defineStore("experiment", () => {
 
   /* ---------------- 控制台日志 ---------------- */
   const logs = ref([]);
+
+  /* ---------------- 实验记录保存 ---------------- */
+  const recordSaving = ref(false);
+  const recordStatus = ref("");
 
   /* ---------------- 派生状态（对应原版 updateButtons） ---------------- */
   const canSelectVehicle = computed(() => connected.value && hasBlueprints.value && !vehicleCreated.value);
@@ -212,6 +219,52 @@ export const useExperimentStore = defineStore("experiment", () => {
     telemetry.value = next;
   }
 
+  /* ---------------- 实验记录保存 ---------------- */
+  async function saveExperimentRecord(name = "") {
+    recordSaving.value = true;
+    recordStatus.value = "正在保存实验记录…";
+    try {
+      const payload = {
+        name: String(name || "").trim(),
+        duration_seconds: currentDurationSeconds(),
+        speed: Number(telemetry.value.speed) || 0,
+        acceleration: Number(telemetry.value.acceleration) || 0,
+        throttle: Number(telemetry.value.throttle) || 0,
+        yaw: Number(telemetry.value.yaw) || 0,
+        front_fps: Number(fps.value) || 0
+      };
+      const result = await post("/api/experiments", payload);
+      recordStatus.value = `已写入数据库：${result.experiment?.name || payload.name}`;
+      log(`实验记录已保存（id=${result.experiment?.id ?? "?"}）`, "ok");
+      resetTimer();
+      return true;
+    } catch (error) {
+      recordStatus.value = `保存失败：${error.message}`;
+      log(`保存实验记录失败：${error.message}`, "err");
+      return false;
+    } finally {
+      recordSaving.value = false;
+    }
+  }
+
+  /* ---------------- 实验计时 ---------------- */
+  function stopTimer() {
+    if (drivingStartedAt !== null) {
+      accumulatedSeconds += Math.max(0, (Date.now() - drivingStartedAt) / 1000);
+      drivingStartedAt = null;
+    }
+  }
+
+  function currentDurationSeconds() {
+    const running = drivingStartedAt !== null ? (Date.now() - drivingStartedAt) / 1000 : 0;
+    return Math.round(accumulatedSeconds + running);
+  }
+
+  function resetTimer() {
+    drivingStartedAt = null;
+    accumulatedSeconds = 0;
+  }
+
   /* ---------------- 消息处理 ---------------- */
   function handleTextMessage(text) {
     let message;
@@ -243,15 +296,18 @@ export const useExperimentStore = defineStore("experiment", () => {
       if (message.message === "driving_started") {
         startPending.value = false;
         driving.value = true;
+        drivingStartedAt = Date.now();
         log("自动驾驶已启动", "ok");
       } else if (message.message === "driving_stopped") {
         stopPending.value = false;
         driving.value = false;
+        stopTimer();
         log("自动驾驶已停止", "warn");
       } else if (message.message === "vehicle_destroyed") {
         destroyPending.value = false;
         vehicleCreated.value = false;
         driving.value = false;
+        stopTimer();
         frameResetTick.value += 1;
         log("车辆与传感器已销毁", "warn");
       }
@@ -341,6 +397,7 @@ export const useExperimentStore = defineStore("experiment", () => {
       if (socket !== activeSocket) return;
       window.clearInterval(fpsTimer);
       fpsTimer = null;
+      stopTimer();
       vehicleCreated.value = false;
       driving.value = false;
       creationPending.value = false;
@@ -441,6 +498,10 @@ export const useExperimentStore = defineStore("experiment", () => {
     modelsLoading,
     modelsLoaded,
     logs,
+    recordSaving,
+    recordStatus,
+    saveExperimentRecord,
+    currentDurationSeconds,
     canSelectVehicle,
     canCreate,
     canStart,
