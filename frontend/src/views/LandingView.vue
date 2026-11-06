@@ -1,6 +1,5 @@
 <script setup>
 import { useAuthStore } from "@/stores/auth.js";
-import AppLink from "@/components/AppLink.vue";
 
 defineOptions({ name: "LandingView" });
 
@@ -13,17 +12,6 @@ function scrollToCapabilities() {
 
 <template>
   <section id="landingView" class="landing-page">
-    <header class="topbar landing-topbar">
-      <AppLink class="brand" route="home" aria-label="FusionLab 首页">
-        <div class="brand-mark" aria-hidden="true"></div>Fusion<span>Lab</span>
-      </AppLink>
-      <nav class="nav landing-nav" aria-label="主导航">
-        <AppLink class="landing-nav-active" route="home">首页</AppLink>
-        <AppLink route="dashboard">实验中心</AppLink>
-        <AppLink route="profile">个人中心</AppLink>
-      </nav>
-      <button class="landing-login" id="openLogin" @click="auth.openLogin()">登录平台 <span>↗</span></button>
-    </header>
     <main class="container landing-content">
       <section class="hero">
         <div class="hero-copy">

@@ -2,7 +2,6 @@
 import { nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useExperimentStore } from "@/stores/experiment.js";
-import AppTopbar from "@/components/AppTopbar.vue";
 
 defineOptions({ name: "WorkspaceView" });
 
@@ -132,11 +131,6 @@ onUnmounted(() => {
 
 <template>
   <section id="experimentView" class="workspace">
-    <AppTopbar variant="workspace" active="dashboard">
-      <template #connection>
-        <div class="connection" id="connectionPill" :class="{ ok: exp.connected }"><i></i><span id="connectionText">{{ exp.connectionText }}</span></div>
-      </template>
-    </AppTopbar>
     <header class="work-contextbar">
       <div class="work-context-title">
         <button class="back-btn" id="backDashboard" aria-label="返回我的实验" @click="router.push('/dashboard')">←</button>

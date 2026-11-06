@@ -2,7 +2,6 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { get, post } from "@/api/client.js";
 import { useAuthStore } from "@/stores/auth.js";
-import AppTopbar from "@/components/AppTopbar.vue";
 
 defineOptions({ name: "MessageView" });
 
@@ -232,7 +231,6 @@ onMounted(() => {
 
 <template>
   <section id="messageView">
-    <AppTopbar variant="page" active="message" />
     <main class="container view-container">
       <header class="page-head"><p class="eyebrow">MESSAGES</p><h1>私信</h1><p>{{ isAdmin ? "管理员可向任意普通用户收发私信。" : "普通用户仅可与系统管理员对话，用户之间不可互相私信。" }}</p></header>
       <p :class="statusClass" id="messagesStatus" role="status" aria-live="polite">{{ statusText }}</p>

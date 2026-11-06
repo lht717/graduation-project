@@ -21,14 +21,49 @@ const sectionTitles = {
   basics: "基础信息"
 };
 const sectionTitle = computed(() => sectionTitles[adminSection.value] || "学习看板");
+const recentSectionStorageKey = "fusionlab_admin_recent_sections";
+const recentSectionLimit = 5;
+const adminSectionMeta = {
+  dashboard: { icon: "看", tone: "quick-blue" },
+  users: { icon: "学", tone: "quick-green" },
+  classes: { icon: "班", tone: "quick-orange" },
+  roles: { icon: "权", tone: "quick-violet" },
+  experiments: { icon: "验", tone: "quick-violet" }
+};
+
+function loadRecentSections() {
+  const storedSections = localStorage.getItem(recentSectionStorageKey);
+  if (!storedSections) return [];
+  try {
+    const sections = JSON.parse(storedSections);
+    return Array.isArray(sections)
+      ? sections.filter((section) => Object.hasOwn(adminSectionMeta, section)).slice(0, recentSectionLimit)
+      : [];
+  } catch (error) {
+    console.warn("无法读取最近访问的管理页面记录。", error);
+    localStorage.removeItem(recentSectionStorageKey);
+    return [];
+  }
+}
+
+const recentSections = ref(loadRecentSections());
+const recentSectionLinks = computed(() =>
+  recentSections.value.map((section) => ({
+    id: section,
+    title: sectionTitles[section],
+    ...adminSectionMeta[section]
+  }))
+);
 
 const experimentTotal = ref(null);
+const dashboardExperimentsLoading = ref(false);
+const dashboardExperimentsError = ref("");
+const studentTotal = ref(null);
 const stats = computed(() => [
   { label: "实验", value: experimentTotal.value ?? "—", tone: "violet", icon: "验" },
-  { label: "学生", value: 2, tone: "green", icon: "学" }
+  { label: "学生", value: studentTotal.value ?? "—", tone: "green", icon: "学" }
 ]);
-const recentExperiments = [];
-const recentRecords = [];
+const recentExperiments = ref([]);
 
 const users = ref([]);
 const usersStatus = ref("");
@@ -79,6 +114,12 @@ const experimentStatusState = ref("");
 const experimentLoading = ref(false);
 const experimentPage = ref(1);
 const experimentPageSize = 10;
+const experimentTypes = [
+  "智能汽车视觉感知实验",
+  "仓储 AGV 实验",
+  "巡检机器人实验"
+];
+const experimentTypeFilter = ref("");
 const experimentFormOpen = ref(false);
 const experimentSaving = ref(false);
 const experimentEditingId = ref(null);
@@ -86,12 +127,8 @@ const experimentActionId = ref(null);
 const experimentToView = ref(null);
 const experimentForm = ref({
   name: "",
-  duration_seconds: 0,
-  speed: 0,
-  acceleration: 0,
-  throttle: 0,
-  yaw: 0,
-  front_fps: 0
+  experiment_type: "",
+  description: ""
 });
 const roleUsers = ref([]);
 const rolesStatus = ref("");
@@ -271,14 +308,18 @@ function formatDuration(seconds) {
   return `${remainingSeconds}秒`;
 }
 
-async function loadExperiments(keyword = experimentKeyword.value.trim()) {
+async function loadExperiments(
+  keyword = experimentKeyword.value.trim(),
+  experimentType = experimentTypeFilter.value
+) {
   experimentLoading.value = true;
   setExperimentStatus("正在加载实验列表…", "loading");
   try {
-    const result = await get(`/api/admin/experiments?keyword=${encodeURIComponent(keyword)}`);
+    const params = new URLSearchParams({ keyword, experiment_type: experimentType });
+    const result = await get(`/api/admin/experiments?${params}`);
     if (!Array.isArray(result.experiments)) throw new Error("实验列表格式不正确");
     experiments.value = result.experiments;
-    if (!keyword) experimentTotal.value = result.experiments.length;
+    if (!keyword && !experimentType) experimentTotal.value = result.experiments.length;
     experimentPage.value = 1;
     setExperimentStatus(`共 ${experiments.value.length} 条实验记录。`, "success");
   } catch (error) {
@@ -290,32 +331,52 @@ async function loadExperiments(keyword = experimentKeyword.value.trim()) {
 }
 
 async function loadExperimentCount() {
+  dashboardExperimentsLoading.value = true;
+  dashboardExperimentsError.value = "";
   try {
     const result = await get("/api/admin/experiments");
-    if (Array.isArray(result.experiments)) experimentTotal.value = result.experiments.length;
-  } catch {
+    if (!Array.isArray(result.experiments)) throw new Error("实验列表格式不正确");
+    experimentTotal.value = result.experiments.length;
+    recentExperiments.value = result.experiments.slice(0, 5);
+  } catch (error) {
     experimentTotal.value = null;
+    recentExperiments.value = [];
+    dashboardExperimentsError.value = error.message;
+    dashboardStatus.value = `实验数据加载失败：${error.message}`;
+  } finally {
+    dashboardExperimentsLoading.value = false;
+  }
+}
+
+async function loadStudentCount() {
+  try {
+    const result = await get("/api/admin/users");
+    if (!Array.isArray(result.users)) throw new Error("用户列表格式不正确");
+    studentTotal.value = result.users.filter((user) => user.role === "user").length;
+  } catch (error) {
+    studentTotal.value = null;
+    const message = `学生人数加载失败：${error.message}`;
+    dashboardStatus.value = dashboardStatus.value
+      ? `${dashboardStatus.value}；${message}`
+      : message;
   }
 }
 
 function resetExperimentSearch() {
   experimentKeyword.value = "";
-  void loadExperiments("");
+  experimentTypeFilter.value = "";
+  void loadExperiments("", "");
 }
 
 function openExperimentForm(item = null) {
   experimentEditingId.value = item?.id ?? null;
   experimentForm.value = item
     ? {
-        name: item.name || "",
-        duration_seconds: item.duration_seconds || 0,
-        speed: item.speed || 0,
-        acceleration: item.acceleration || 0,
-        throttle: item.throttle || 0,
-        yaw: item.yaw || 0,
-        front_fps: item.front_fps || 0
-      }
-    : { name: "", duration_seconds: 0, speed: 0, acceleration: 0, throttle: 0, yaw: 0, front_fps: 0 };
+      name: item.name || "",
+      experiment_type: item.experiment_type || "",
+      description: item.description || ""
+    }
+    : { name: "", experiment_type: "", description: "" };
   experimentFormOpen.value = true;
 }
 
@@ -329,8 +390,9 @@ async function saveExperiment() {
     ...experimentForm.value,
     name: experimentForm.value.name.trim()
   };
-  if (!payload.name) {
-    setExperimentStatus("请输入实验名称。", "error");
+  payload.description = payload.description.trim();
+  if (!payload.name || !payload.experiment_type || !payload.description) {
+    setExperimentStatus("请填写实验名称、实验类型和实验简介。", "error");
     return;
   }
   experimentSaving.value = true;
@@ -385,6 +447,13 @@ async function deleteExperiment(item) {
 function selectSection(section) {
   adminSection.value = section;
   dashboardStatus.value = "";
+  if (Object.hasOwn(adminSectionMeta, section)) {
+    recentSections.value = [
+      section,
+      ...recentSections.value.filter((recentSection) => recentSection !== section)
+    ].slice(0, recentSectionLimit);
+    localStorage.setItem(recentSectionStorageKey, JSON.stringify(recentSections.value));
+  }
   if (section === "users") {
     void loadUsers();
     void loadClasses();
@@ -403,7 +472,11 @@ function refreshDashboard() {
   else if (adminSection.value === "classes") void loadClasses();
   else if (adminSection.value === "roles") void loadRoles();
   else if (adminSection.value === "experiments") void loadExperiments();
-  else dashboardStatus.value = "当前展示示例数据，尚未连接看板数据接口。";
+  else {
+    dashboardStatus.value = "";
+    void loadExperimentCount();
+    void loadStudentCount();
+  }
 }
 
 function closeForms() {
@@ -429,9 +502,11 @@ async function loadUsers() {
     const result = await get("/api/admin/users");
     if (!Array.isArray(result.users)) throw new Error("用户列表格式不正确");
     users.value = result.users.filter((item) => item.role !== "admin");
+    studentTotal.value = result.users.filter((item) => item.role === "user").length;
     setStatus(usersStatus, `加载成功，共 ${users.value.length} 位普通用户。`, "success");
   } catch (error) {
     users.value = [];
+    studentTotal.value = null;
     setStatus(usersStatus, `用户列表加载失败：${error.message}`, "error");
   }
 }
@@ -805,6 +880,7 @@ async function submitAdminMessage() {
 
 onMounted(() => {
   void loadExperimentCount();
+  void loadStudentCount();
 });
 
 </script>
@@ -864,33 +940,38 @@ onMounted(() => {
           </section>
 
           <section class="admin-dashboard-card admin-quick-card">
-            <div class="admin-card-heading"><div><h2>快捷入口</h2><p>快速访问常用管理功能</p></div></div>
+            <div class="admin-card-heading"><div><h2>快捷入口</h2><p>最近访问的管理页面</p></div></div>
             <div class="admin-quick-grid">
-              <button @click="selectSection('experiments')"><span class="quick-icon quick-violet">验</span><span><b>实验管理</b><small>维护实验内容</small></span><i>›</i></button>
-              <button @click="selectSection('users')"><span class="quick-icon quick-green">学</span><span><b>学生管理</b><small>管理学生账号</small></span><i>›</i></button>
+              <button
+                v-for="page in recentSectionLinks"
+                :key="page.id"
+                type="button"
+                @click="selectSection(page.id)"
+              >
+                <span :class="['quick-icon', page.tone]">{{ page.icon }}</span>
+                <span><b>{{ page.title }}</b><small>最近访问</small></span>
+                <i>›</i>
+              </button>
+              <p v-if="!recentSectionLinks.length" class="admin-quick-empty">暂无最近访问页面</p>
             </div>
           </section>
 
           <section class="admin-dashboard-card admin-recent-experiments">
-            <div class="admin-card-heading"><div><h2>最近实验</h2><p>最近更新的实验内容</p></div><button class="admin-text-link" @click="selectSection('experiments')">全部实验 <span>›</span></button></div>
+            <div class="admin-card-heading"><div><h2>最近实验</h2><p>最近添加的实验内容</p></div><button class="admin-text-link" @click="selectSection('experiments')">全部实验 <span>›</span></button></div>
             <div class="admin-table-scroll"><table class="admin-dashboard-table">
-              <thead><tr><th>实验名称</th><th>学时</th><th>操作</th></tr></thead>
+              <thead><tr><th>实验名称</th><th>运行时长</th><th>操作</th></tr></thead>
               <tbody>
-                <tr v-if="!recentExperiments.length"><td colspan="3" class="admin-empty">暂无实验内容</td></tr>
-                <tr v-for="experiment in recentExperiments" :key="experiment.name"><td class="table-primary">{{ experiment.name }}</td><td>{{ experiment.hours }} 学时</td><td><button class="admin-row-action" @click="selectSection('experiments')">编辑</button></td></tr>
+                <tr v-if="dashboardExperimentsLoading"><td colspan="3" class="admin-empty">正在加载实验数据…</td></tr>
+                <tr v-else-if="dashboardExperimentsError"><td colspan="3" class="admin-empty">实验数据加载失败：{{ dashboardExperimentsError }}</td></tr>
+                <tr v-else-if="!recentExperiments.length"><td colspan="3" class="admin-empty">暂无实验数据</td></tr>
+                <tr v-for="experiment in recentExperiments" :key="experiment.id"><td class="table-primary">{{ experiment.name }}</td><td>{{ formatDuration(experiment.duration_seconds) }}</td><td><button class="admin-row-action" @click="selectSection('experiments')">管理</button></td></tr>
               </tbody>
             </table></div>
           </section>
 
           <section class="admin-dashboard-card admin-record-card">
             <div class="admin-card-heading"><div><h2>最近实验记录</h2><p>学生近期实验运行状态</p></div></div>
-            <div class="admin-table-scroll"><table class="admin-dashboard-table">
-              <thead><tr><th>实验</th><th>学员</th><th>状态</th><th>时间</th></tr></thead>
-              <tbody>
-                <tr v-if="!recentRecords.length"><td colspan="4" class="admin-empty">暂无实验记录</td></tr>
-                <tr v-for="record in recentRecords" :key="`${record.experiment}-${record.time}`"><td class="table-primary">{{ record.experiment }}</td><td>{{ record.student }}</td><td><span :class="['admin-state-tag', record.status === '运行中' ? 'state-running' : 'state-missing']"><i></i>{{ record.status }}</span></td><td>{{ record.time }}</td></tr>
-              </tbody>
-            </table></div>
+            <p class="admin-dashboard-status">后端暂未提供学生实验运行记录查询接口，当前无法显示真实记录。</p>
           </section>
         </template>
 
@@ -1094,6 +1175,11 @@ onMounted(() => {
             <form class="experiment-search" @submit.prevent="loadExperiments()">
               <label class="sr-only" for="experimentKeyword">实验名称</label>
               <input id="experimentKeyword" v-model="experimentKeyword" type="search" placeholder="请输入实验名称">
+              <label class="sr-only" for="experimentTypeFilter">实验类型</label>
+              <select id="experimentTypeFilter" v-model="experimentTypeFilter" aria-label="按实验类型筛选">
+                <option value="">全部实验类型</option>
+                <option v-for="type in experimentTypes" :key="type" :value="type">{{ type }}</option>
+              </select>
               <button class="btn btn-outline" type="button" @click="resetExperimentSearch">重置</button>
               <button class="btn btn-primary" type="submit" :disabled="experimentLoading">查询</button>
             </form>
@@ -1108,12 +1194,13 @@ onMounted(() => {
             </div>
             <div class="admin-table-scroll experiment-table-scroll">
               <table class="admin-dashboard-table experiment-table">
-                <thead><tr><th>实验名称</th><th>实验时长</th><th>车辆速度</th><th>加速度</th><th>油门</th><th>车辆朝向</th><th>前视流帧率</th><th>创建时间</th><th>操作</th></tr></thead>
+                <thead><tr><th>实验名称</th><th>实验类型</th><th>实验时长</th><th>车辆速度</th><th>加速度</th><th>油门</th><th>车辆朝向</th><th>前视流帧率</th><th>创建时间</th><th>操作</th></tr></thead>
                 <tbody>
-                  <tr v-if="experimentLoading"><td colspan="9" class="admin-empty">正在读取数据库记录…</td></tr>
-                  <tr v-else-if="!visibleExperiments.length"><td colspan="9" class="admin-empty">{{ experimentKeyword ? "没有匹配的实验记录" : "数据库中暂无实验记录" }}</td></tr>
+                  <tr v-if="experimentLoading"><td colspan="10" class="admin-empty">正在读取数据库记录…</td></tr>
+                  <tr v-else-if="!visibleExperiments.length"><td colspan="10" class="admin-empty">{{ experimentKeyword || experimentTypeFilter ? "没有匹配的实验记录" : "数据库中暂无实验记录" }}</td></tr>
                   <tr v-for="item in visibleExperiments" :key="item.id">
                     <td class="experiment-name-cell"><strong>{{ item.name }}</strong><span :class="['experiment-state', item.is_active ? 'is-active' : 'is-inactive']">{{ item.is_active ? "已启用" : "已停用" }}</span></td>
+                    <td>{{ item.experiment_type || "未设置" }}</td>
                     <td>{{ formatDuration(item.duration_seconds) }}</td>
                     <td>{{ Number(item.speed || 0).toFixed(1) }} <small>km/h</small></td>
                     <td>{{ Number(item.acceleration || 0).toFixed(2) }} <small>m/s²</small></td>
@@ -1147,12 +1234,15 @@ onMounted(() => {
               <form @submit.prevent="saveExperiment">
                 <div class="experiment-form-grid">
                   <label class="experiment-form-name">实验名称<input v-model="experimentForm.name" maxlength="128" required placeholder="输入实验名称"></label>
-                  <label>实验时长（秒）<input v-model.number="experimentForm.duration_seconds" type="number" min="0" step="1" required></label>
-                  <label>车辆速度（km/h）<input v-model.number="experimentForm.speed" type="number" step="0.1" required></label>
-                  <label>加速度（m/s²）<input v-model.number="experimentForm.acceleration" type="number" step="0.01" required></label>
-                  <label>油门（%）<input v-model.number="experimentForm.throttle" type="number" step="0.1" required></label>
-                  <label>车辆朝向（°）<input v-model.number="experimentForm.yaw" type="number" step="0.1" required></label>
-                  <label>前视流帧率（fps）<input v-model.number="experimentForm.front_fps" type="number" min="0" step="0.1" required></label>
+                  <label>实验类型
+                    <select v-model="experimentForm.experiment_type" required>
+                      <option disabled value="">请选择实验类型</option>
+                      <option v-for="type in experimentTypes" :key="type" :value="type">{{ type }}</option>
+                    </select>
+                  </label>
+                  <label class="experiment-form-description">实验简介
+                    <textarea v-model="experimentForm.description" maxlength="2000" rows="5" required placeholder="请简要介绍实验内容"></textarea>
+                  </label>
                 </div>
                 <footer><button type="button" class="btn btn-outline" @click="closeExperimentForm">取消</button><button type="submit" class="btn btn-primary" :disabled="experimentSaving">{{ experimentSaving ? "保存中…" : "保存实验" }}</button></footer>
               </form>
@@ -1163,6 +1253,8 @@ onMounted(() => {
             <section class="experiment-modal experiment-detail-modal" role="dialog" aria-modal="true" aria-labelledby="experimentDetailTitle">
               <header><div><p class="admin-eyebrow">EXPERIMENT DETAIL</p><h2 id="experimentDetailTitle">{{ experimentToView.name }}</h2></div><button type="button" class="experiment-modal-close" aria-label="关闭" @click="experimentToView = null">×</button></header>
               <dl class="experiment-detail-grid">
+                <div><dt>实验类型</dt><dd>{{ experimentToView.experiment_type || "未设置" }}</dd></div>
+                <div class="experiment-detail-description"><dt>实验简介</dt><dd>{{ experimentToView.description || "暂无简介" }}</dd></div>
                 <div><dt>实验时长</dt><dd>{{ formatDuration(experimentToView.duration_seconds) }}</dd></div>
                 <div><dt>车辆速度</dt><dd>{{ Number(experimentToView.speed || 0).toFixed(1) }} km/h</dd></div>
                 <div><dt>加速度</dt><dd>{{ Number(experimentToView.acceleration || 0).toFixed(2) }} m/s²</dd></div>

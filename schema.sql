@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS `messages` (
 CREATE TABLE IF NOT EXISTS `experiments` (
   `id`                bigint       NOT NULL AUTO_INCREMENT COMMENT '实验ID',
   `name`              varchar(128) NOT NULL COMMENT '实验名称',
+  `experiment_type`   varchar(64)  NOT NULL DEFAULT '' COMMENT '实验类型',
+  `description`       varchar(2000) NOT NULL DEFAULT '' COMMENT '实验简介',
   `duration_seconds`  int          NOT NULL DEFAULT 0 COMMENT '实验时长（秒）',
   `speed`             double       NOT NULL DEFAULT 0 COMMENT '车辆速度（km/h）',
   `acceleration`      double       NOT NULL DEFAULT 0 COMMENT '加速度（m/s²）',

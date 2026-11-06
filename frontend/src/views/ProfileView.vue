@@ -3,12 +3,14 @@ import { computed, nextTick, ref } from "vue";
 import AppLink from "@/components/AppLink.vue";
 import { post } from "@/api/client.js";
 import { useAuthStore } from "@/stores/auth.js";
-import AppTopbar from "@/components/AppTopbar.vue";
 
 defineOptions({ name: "ProfileView" });
 
 const auth = useAuthStore();
 
+const avatarPreviewOpen = ref(false);
+const avatarPreviewDialog = ref(null);
+const avatarPreviewTrigger = ref(null);
 const avatarInput = ref(null);
 const cropStage = ref(null);
 const cropImage = ref(null);
@@ -53,6 +55,17 @@ const passwordStatusClass = computed(() =>
 const avatarStatusClass = computed(() =>
   avatarStatusState.value ? `status ${avatarStatusState.value}` : "status"
 );
+
+async function openAvatarPreview() {
+  avatarPreviewOpen.value = true;
+  await nextTick();
+  avatarPreviewDialog.value?.focus();
+}
+
+function closeAvatarPreview() {
+  avatarPreviewOpen.value = false;
+  nextTick(() => avatarPreviewTrigger.value?.focus());
+}
 
 const cropImageStyle = computed(() => {
   const { width, height } = cropImageSize.value;
@@ -146,6 +159,7 @@ function moveCrop(event) {
 async function confirmAvatarCrop() {
   const image = cropImage.value;
   if (!image || !cropImageSize.value.width) return;
+  let saved = false;
   cropSaving.value = true;
   avatarStatus.value = "正在保存头像…";
   avatarStatusState.value = "loading";
@@ -171,13 +185,14 @@ async function confirmAvatarCrop() {
     await auth.saveAvatar(croppedAvatar);
     avatarStatus.value = "头像已更新，已保存到服务器。";
     avatarStatusState.value = "success";
-    closeCrop();
+    saved = true;
   } catch (error) {
     avatarStatus.value = `头像更新失败：${error.message}`;
     avatarStatusState.value = "error";
   } finally {
     cropSaving.value = false;
   }
+  if (saved) closeCrop();
 }
 
 async function removeAvatar() {
@@ -257,7 +272,6 @@ async function changePassword() {
 
 <template>
   <section id="profileView">
-    <AppTopbar variant="page" active="profile" />
     <main class="container view-container">
       <header class="page-head"><p class="eyebrow">ACCOUNT</p><h1>个人中心</h1><p>查看账号信息并管理自己的密码。</p></header>
       <div class="profile-summary-grid">
@@ -293,10 +307,17 @@ async function changePassword() {
         <section class="account-card">
           <h2>账号信息</h2>
           <div class="profile-avatar-editor">
-            <div class="profile-avatar-preview" aria-hidden="true">
+            <button
+              ref="avatarPreviewTrigger"
+              class="profile-avatar-preview"
+              type="button"
+              aria-label="放大查看个人头像"
+              aria-haspopup="dialog"
+              @click="openAvatarPreview"
+            >
               <img v-if="auth.avatarUrl" :src="auth.avatarUrl" alt="">
               <span v-else>{{ auth.avatarText }}</span>
-            </div>
+            </button>
             <div class="profile-avatar-details">
               <b>个人头像</b>
               <span>支持常见图片格式，文件大小不超过 2 MB；头像仅保存在当前浏览器。</span>
@@ -344,6 +365,21 @@ async function changePassword() {
         </section>
       </div>
     </main>
+    <div v-if="avatarPreviewOpen" class="avatar-preview-backdrop" @click.self="closeAvatarPreview">
+      <section
+        ref="avatarPreviewDialog"
+        class="avatar-preview-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="个人头像预览"
+        tabindex="-1"
+        @keydown.esc="closeAvatarPreview"
+      >
+        <button class="avatar-preview-close" type="button" aria-label="关闭头像预览" @click="closeAvatarPreview">×</button>
+        <img v-if="auth.avatarUrl" :src="auth.avatarUrl" alt="放大后的个人头像">
+        <span v-else>{{ auth.avatarText }}</span>
+      </section>
+    </div>
     <div v-if="cropImageSrc" class="avatar-crop-backdrop" @click.self="closeCrop">
       <section class="avatar-crop-dialog" role="dialog" aria-modal="true" aria-labelledby="avatarCropTitle">
         <header class="avatar-crop-header">

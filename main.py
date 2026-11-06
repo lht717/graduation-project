@@ -61,7 +61,7 @@ DB_CONFIG = {
     "host": "127.0.0.1",
     "port": 3306,
     "user": "root",
-    "password": "123456",
+    "password": os.environ.get("FUSIONLAB_DB_PASSWORD", "123456"),
     "database": "fusionlab",
     "charset": "utf8mb4",
 }
@@ -591,8 +591,13 @@ async def admin_delete_class(class_id: int, request: Request):
 
 # ---------- 实验数据管理 API（管理员增删改查） ----------
 EXPERIMENT_COLUMNS = (
-    "name", "duration_seconds", "speed", "acceleration",
+    "name", "experiment_type", "description", "duration_seconds", "speed", "acceleration",
     "throttle", "yaw", "front_fps", "created_at", "is_active",
+)
+EXPERIMENT_TYPES = (
+    "智能汽车视觉感知实验",
+    "仓储 AGV 实验",
+    "巡检机器人实验",
 )
 
 
@@ -600,6 +605,8 @@ def _experiment_public(row: dict) -> dict:
     return {
         "id": int(row["id"]),
         "name": row["name"] or "",
+        "experiment_type": row.get("experiment_type") or "",
+        "description": row.get("description") or "",
         "duration_seconds": int(row["duration_seconds"] or 0),
         "speed": float(row["speed"] or 0),
         "acceleration": float(row["acceleration"] or 0),
@@ -634,6 +641,8 @@ def _experiment_values(body: dict, base: dict = None) -> dict:
 
     return {
         "name": _str("name"),
+        "experiment_type": _str("experiment_type"),
+        "description": _str("description"),
         "duration_seconds": _int("duration_seconds"),
         "speed": _float("speed"),
         "acceleration": _float("acceleration"),
@@ -667,12 +676,44 @@ def _ensure_experiment_status_column() -> None:
         conn.close()
 
 
+def _ensure_experiment_type_column() -> None:
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SHOW COLUMNS FROM experiments LIKE 'experiment_type'")
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE experiments ADD COLUMN experiment_type VARCHAR(64) NOT NULL DEFAULT ''"
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_experiment_description_column() -> None:
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SHOW COLUMNS FROM experiments LIKE 'description'")
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE experiments ADD COLUMN description VARCHAR(2000) NOT NULL DEFAULT ''"
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 _ensure_experiment_status_column()
+_ensure_experiment_type_column()
+_ensure_experiment_description_column()
 
 
 @app.get("/api/admin/experiments")
-async def admin_list_experiments(request: Request, keyword: str = ""):
+async def admin_list_experiments(request: Request, keyword: str = "", experiment_type: str = ""):
     _admin_only(request)
+    if experiment_type and experiment_type not in EXPERIMENT_TYPES:
+        raise HTTPException(status_code=400, detail="实验类型无效")
     conn = _db_conn()
     try:
         with conn.cursor() as cur:
@@ -681,6 +722,9 @@ async def admin_list_experiments(request: Request, keyword: str = ""):
             if keyword:
                 sql += " AND name LIKE %s"
                 params.append(f"%{keyword}%")
+            if experiment_type:
+                sql += " AND experiment_type = %s"
+                params.append(experiment_type)
             sql += " ORDER BY id DESC"
             cur.execute(sql, params)
             return {"experiments": [_experiment_public(row) for row in cur.fetchall()]}
@@ -695,6 +739,12 @@ async def admin_create_experiment(request: Request):
     values = _experiment_values(body)
     if not values["name"]:
         raise HTTPException(status_code=400, detail="实验名称不能为空")
+    if values["experiment_type"] not in EXPERIMENT_TYPES:
+        raise HTTPException(status_code=400, detail="请选择有效的实验类型")
+    if not values["description"]:
+        raise HTTPException(status_code=400, detail="实验简介不能为空")
+    if len(values["description"]) > 2000:
+        raise HTTPException(status_code=400, detail="实验简介不能超过 2000 字")
     conn = _db_conn()
     try:
         with conn.cursor() as cur:
@@ -753,6 +803,12 @@ async def admin_update_experiment(exp_id: int, request: Request):
             values = _experiment_values(body, _experiment_public(row))
             if not values["name"]:
                 raise HTTPException(status_code=400, detail="实验名称不能为空")
+            if values["experiment_type"] not in EXPERIMENT_TYPES:
+                raise HTTPException(status_code=400, detail="请选择有效的实验类型")
+            if not values["description"]:
+                raise HTTPException(status_code=400, detail="实验简介不能为空")
+            if len(values["description"]) > 2000:
+                raise HTTPException(status_code=400, detail="实验简介不能超过 2000 字")
             assignments = ", ".join(f"{column} = %s" for column in EXPERIMENT_COLUMNS)
             cur.execute(
                 f"UPDATE experiments SET {assignments} WHERE id = %s",

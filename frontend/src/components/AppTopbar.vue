@@ -1,15 +1,17 @@
 <script setup>
 import { computed } from "vue";
+import { useRoute } from "vue-router";
 import AppLink from "@/components/AppLink.vue";
 import ProfilePill from "@/components/ProfilePill.vue";
 import { useAuthStore } from "@/stores/auth.js";
+import { useExperimentStore } from "@/stores/experiment.js";
 
-const props = defineProps({
-  variant: { type: String, default: "page" }, // dashboard | page
-  active: { type: String, default: "" }
-});
-
+const route = useRoute();
 const auth = useAuthStore();
+const exp = useExperimentStore();
+const active = computed(() => route.name === "workspace" ? "dashboard" : route.name);
+const profileVariant = computed(() => active.value === "dashboard" ? "dashboard" : "page");
+const isWorkspace = computed(() => route.name === "workspace");
 
 const liveMessageLabel = computed(() => {
   if (auth.unreadTick === 0) return null;
@@ -40,8 +42,13 @@ const liveUnread = computed(() => auth.unreadTick > 0 && auth.hasUnread);
       >管理员后台</AppLink>
     </nav>
     <div class="app-topbar-user">
-      <slot v-if="variant === 'workspace'" name="connection" />
-      <ProfilePill :variant="variant" :current="active === 'profile'" />
+      <div v-if="isWorkspace" class="connection" id="connectionPill" :class="{ ok: exp.connected }">
+        <i></i><span id="connectionText">{{ exp.connectionText }}</span>
+      </div>
+      <button v-if="!auth.authenticated" id="openLogin" class="btn btn-soft app-login-button" type="button" @click="auth.openLogin()">
+        登录平台
+      </button>
+      <ProfilePill v-else :variant="profileVariant" :current="active === 'profile'" />
     </div>
   </header>
 </template>

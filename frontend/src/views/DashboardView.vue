@@ -1,6 +1,5 @@
 <script setup>
 import { useRouter } from "vue-router";
-import AppTopbar from "@/components/AppTopbar.vue";
 
 defineOptions({ name: "DashboardView" });
 
@@ -13,7 +12,6 @@ function openExperiment() {
 
 <template>
   <section id="dashboardView">
-    <AppTopbar variant="dashboard" active="dashboard" />
     <main class="container"><div class="dashboard-head"><div><div class="eyebrow">MY EXPERIMENTS</div><h1>我的实验</h1><p>选择一个实验进入工作台。实验工作台支持虚拟仿真与虚实结合两种运行模式。</p></div></div>
       <div class="experiment-grid">
         <article class="exp-card active-card"><div class="exp-art city"><span class="exp-badge">可运行 · 双模式</span></div><div class="exp-body"><h3>智能汽车视觉感知实验</h3><p>CARLA 城市道路 · UFLD 车道线检测 · YOLO 目标检测 · 自动驾驶状态监控</p><div class="exp-meta"><span class="chip">CARLA</span><span class="chip">ONNX Runtime</span><span class="chip">WebSocket</span></div><button class="btn btn-primary" id="openExperiment" @click="openExperiment">进入实验</button></div></article>
