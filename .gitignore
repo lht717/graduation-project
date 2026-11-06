@@ -44,3 +44,9 @@ Thumbs.db
 # ===== Python 缓存 =====
 __pycache__/
 *.pyc
+
+# ===== 运行时数据与本地备份 =====
+# 用户上传的头像属于运行时数据，不提交
+static/avatars/
+# 拆分 CARLA 模块前的单文件本地备份
+main.py.carla_backup

@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   `role_name`      varchar(32)  NOT NULL DEFAULT '普通用户' COMMENT '角色显示名',
   `password_hash`  varchar(128) NOT NULL COMMENT '密码（加盐哈希）',
   `registered_at`  varchar(64)  NOT NULL DEFAULT '' COMMENT '注册时间',
+  `avatar`         varchar(255) NOT NULL DEFAULT '' COMMENT '头像URL',
+  `class_name`     varchar(64)  NOT NULL DEFAULT '' COMMENT '班级',
   PRIMARY KEY (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户表';
 
@@ -35,3 +37,30 @@ CREATE TABLE IF NOT EXISTS `messages` (
   `created_at`       varchar(64)  NOT NULL COMMENT '发送时间',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='私信表';
+
+-- 4. 实验数据表
+CREATE TABLE IF NOT EXISTS `experiments` (
+  `id`                bigint       NOT NULL AUTO_INCREMENT COMMENT '实验ID',
+  `name`              varchar(128) NOT NULL COMMENT '实验名称',
+  `duration_seconds`  int          NOT NULL DEFAULT 0 COMMENT '实验时长（秒）',
+  `speed`             double       NOT NULL DEFAULT 0 COMMENT '车辆速度（km/h）',
+  `acceleration`      double       NOT NULL DEFAULT 0 COMMENT '加速度（m/s²）',
+  `throttle`          double       NOT NULL DEFAULT 0 COMMENT '油门（%）',
+  `yaw`               double       NOT NULL DEFAULT 0 COMMENT '车辆朝向（度）',
+  `front_fps`         double       NOT NULL DEFAULT 0 COMMENT '前视流帧率（fps）',
+  `created_at`        varchar(64)  NOT NULL DEFAULT '' COMMENT '创建时间',
+  `is_active`         tinyint(1)   NOT NULL DEFAULT 0 COMMENT '实验是否启用',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='实验数据表';
+
+-- 5. 班级信息表
+CREATE TABLE IF NOT EXISTS `classes` (
+  `id`             bigint        NOT NULL AUTO_INCREMENT COMMENT '班级ID',
+  `name`           varchar(128)  NOT NULL COMMENT '班级名称',
+  `grade`          varchar(32)   NOT NULL COMMENT '年级',
+  `student_count`  int           NOT NULL DEFAULT 0 COMMENT '班级人数',
+  `sort_order`     int           NOT NULL DEFAULT 0 COMMENT '显示排序',
+  `created_at`     varchar(64)   NOT NULL DEFAULT '' COMMENT '创建时间',
+  `remark`         varchar(500)  NOT NULL DEFAULT '' COMMENT '备注',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='班级信息表';

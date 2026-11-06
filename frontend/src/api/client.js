@@ -21,7 +21,11 @@ export async function request(path, options = {}) {
     }
   }
   if (!response.ok) {
-    throw new Error(payload.detail || payload.message || `请求失败（HTTP ${response.status}）`);
+    const message = payload.detail || payload.message || `请求失败（HTTP ${response.status}）`;
+    if (response.status === 401) localStorage.removeItem("fusionlab_token");
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   return payload;
 }

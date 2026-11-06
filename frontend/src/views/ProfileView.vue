@@ -169,7 +169,7 @@ async function confirmAvatarCrop() {
       }, "image/jpeg", 0.9);
     });
     await auth.saveAvatar(croppedAvatar);
-    avatarStatus.value = "头像已更新，仅保存在当前浏览器。";
+    avatarStatus.value = "头像已更新，已保存到服务器。";
     avatarStatusState.value = "success";
     closeCrop();
   } catch (error) {
@@ -180,10 +180,17 @@ async function confirmAvatarCrop() {
   }
 }
 
-function removeAvatar() {
-  auth.removeAvatar();
-  avatarStatus.value = "已恢复默认头像。";
-  avatarStatusState.value = "success";
+async function removeAvatar() {
+  avatarStatus.value = "正在恢复默认头像…";
+  avatarStatusState.value = "loading";
+  try {
+    await auth.removeAvatar();
+    avatarStatus.value = "已恢复默认头像。";
+    avatarStatusState.value = "success";
+  } catch (error) {
+    avatarStatus.value = `恢复失败：${error.message}`;
+    avatarStatusState.value = "error";
+  }
 }
 
 function refreshCompletedExperiments() {

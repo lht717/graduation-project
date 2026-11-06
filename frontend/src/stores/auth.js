@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { get, post } from "@/api/client.js";
+import { config } from "@/config.js";
 
 function messageReadKey(username) {
   return `fusionlab_last_read_message_${username}`;
@@ -12,24 +13,19 @@ function messageSequence(message) {
 }
 
 const DEFAULT_USER = { username: "demo", role: "user", role_name: "普通用户" };
-const MOCK_SESSION_KEY = "fusionlab_mock_user";
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 const avatarStorageKey = (username) => `fusionlab_avatar_${encodeURIComponent(username)}`;
-const MOCK_ACCOUNTS = {
-  demo: {
-    password: "demo",
-    user: { username: "demo", role: "user", role_name: "普通用户" }
-  },
-  admin: {
-    password: "admin",
-    user: { username: "admin", role: "admin", role_name: "管理员" }
-  }
-};
+
+function normalizeAvatarUrl(url) {
+  if (!url) return "";
+  if (url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://")) return url;
+  const base = config.apiBaseUrl.replace(/\/$/, "");
+  return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
+}
 
 export const useAuthStore = defineStore("auth", () => {
   const user = ref({ ...DEFAULT_USER });
   const authenticated = ref(false);
-  const isMockSession = ref(false);
   const avatarUrl = ref("");
 
   const loginModalOpen = ref(false);
@@ -60,7 +56,12 @@ export const useAuthStore = defineStore("auth", () => {
   );
 
   function loadUserAvatar(username) {
-    avatarUrl.value = username ? localStorage.getItem(avatarStorageKey(username)) || "" : "";
+    const backendAvatar = user.value?.avatar || "";
+    avatarUrl.value = backendAvatar
+      ? normalizeAvatarUrl(backendAvatar)
+      : username
+        ? localStorage.getItem(avatarStorageKey(username)) || ""
+        : "";
   }
 
   async function saveAvatar(file) {
@@ -81,13 +82,22 @@ export const useAuthStore = defineStore("auth", () => {
       reader.readAsDataURL(file);
     });
 
-    localStorage.setItem(avatarStorageKey(user.value.username), dataUrl);
-    avatarUrl.value = dataUrl;
+    const result = await post("/api/users/me/avatar", { avatar: dataUrl });
+    if (result.user) user.value = result.user;
+    const nextAvatar = result.user?.avatar || "";
+    avatarUrl.value = nextAvatar ? normalizeAvatarUrl(nextAvatar) : dataUrl;
+    localStorage.removeItem(avatarStorageKey(user.value.username));
   }
 
-  function removeAvatar() {
+  async function removeAvatar() {
     if (user.value.username) localStorage.removeItem(avatarStorageKey(user.value.username));
-    avatarUrl.value = "";
+    if (!authenticated.value) {
+      avatarUrl.value = "";
+      return;
+    }
+    const result = await post("/api/users/me/avatar", { avatar: "/static/avatar_default.png" });
+    if (result.user) user.value = result.user;
+    avatarUrl.value = normalizeAvatarUrl(result.user?.avatar || "/static/avatar_default.png");
   }
 
   function openLogin(message = "") {
@@ -119,7 +129,7 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   async function refreshMessageIndicator() {
-    if (!authenticated.value || isMockSession.value) return;
+    if (!authenticated.value) return;
     const username = user.value.username;
     try {
       const result = await get("/api/messages");
@@ -132,8 +142,12 @@ export const useAuthStore = defineStore("auth", () => {
           messageSequence(message) > lastRead
       );
       updateMessageIndicator(next);
-    } catch {
-      // 私信接口不可用时保留上一次的指示器状态
+    } catch (error) {
+      if (error && error.status === 401) {
+        authenticated.value = false;
+        updateMessageIndicator(false);
+        stopUnreadPolling();
+      }
     }
   }
 
@@ -155,21 +169,6 @@ export const useAuthStore = defineStore("auth", () => {
     loginStatusState.value = "loading";
     try {
       const expectedRole = selectedRole === "teacher" ? "admin" : "user";
-      if (import.meta.env.DEV) {
-        const account = MOCK_ACCOUNTS[String(username).trim()];
-        if (!account || account.password !== password || account.user.role !== expectedRole) {
-          throw new Error("模拟登录账号或密码错误");
-        }
-        localStorage.removeItem("fusionlab_token");
-        localStorage.setItem(MOCK_SESSION_KEY, account.user.username);
-        user.value = { ...account.user };
-        authenticated.value = true;
-        isMockSession.value = true;
-        loadUserAvatar(account.user.username);
-        updateMessageIndicator(false);
-        return true;
-      }
-
       const result = await post("/api/auth/login", { username: String(username).trim(), password });
       if (!result.authenticated || !result.user) throw new Error("登录响应无效");
       if (result.user.role !== expectedRole) {
@@ -186,7 +185,6 @@ export const useAuthStore = defineStore("auth", () => {
       if (result.token) localStorage.setItem("fusionlab_token", result.token);
       user.value = result.user;
       authenticated.value = true;
-      isMockSession.value = false;
       loadUserAvatar(result.user.username);
       startUnreadPolling();
       return true;
@@ -201,13 +199,9 @@ export const useAuthStore = defineStore("auth", () => {
 
   /** 原版 data-logout 事件委托里的逻辑 */
   async function logout() {
-    if (!isMockSession.value) {
-      await post("/api/auth/logout", {});
-      localStorage.removeItem("fusionlab_token");
-    }
-    localStorage.removeItem(MOCK_SESSION_KEY);
+    await post("/api/auth/logout", {});
+    localStorage.removeItem("fusionlab_token");
     authenticated.value = false;
-    isMockSession.value = false;
     avatarUrl.value = "";
     stopUnreadPolling();
     user.value = { ...DEFAULT_USER };
@@ -215,27 +209,17 @@ export const useAuthStore = defineStore("auth", () => {
 
   /** 原版 initialize() 的第一段：读取 /api/auth/me */
   async function bootstrap() {
-    if (import.meta.env.DEV) {
-      const mockUser = MOCK_ACCOUNTS[localStorage.getItem(MOCK_SESSION_KEY)]?.user;
-      if (mockUser) {
-        user.value = { ...mockUser };
-        authenticated.value = true;
-        isMockSession.value = true;
-        loadUserAvatar(mockUser.username);
-      } else {
-        localStorage.removeItem(MOCK_SESSION_KEY);
-        avatarUrl.value = "";
-      }
-      return;
-    }
-
     try {
       const result = await get("/api/auth/me");
       if (result.user) user.value = result.user;
       authenticated.value = Boolean(result.authenticated);
-      isMockSession.value = false;
       loadUserAvatar(authenticated.value ? result.user?.username : "");
     } catch (error) {
+      if (error && error.status === 401) {
+        authenticated.value = false;
+        user.value = { ...DEFAULT_USER };
+        avatarUrl.value = "";
+      }
       loginStatus.value = `账号状态读取失败：${error.message}`;
     }
     if (authenticated.value) startUnreadPolling();
@@ -244,7 +228,6 @@ export const useAuthStore = defineStore("auth", () => {
   return {
     user,
     authenticated,
-    isMockSession,
     avatarUrl,
     loginModalOpen,
     loginStatus,
