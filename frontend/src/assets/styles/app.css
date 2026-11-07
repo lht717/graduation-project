@@ -356,6 +356,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .admin-quick-grid>button:hover{border-color:#d5e2d1;background:#f9fbf7}
 .quick-blue,.quick-violet,.quick-green,.quick-orange{background:#edf3e9;color:#628269}
 .admin-text-link,.admin-row-action,.admin-empty-icon{color:#568267}
+.admin-dashboard-edit-link{padding:0;border:0;background:transparent;color:#4779c3;font-size:11px;cursor:pointer}
+.admin-dashboard-edit-link:hover{color:#245eb7;text-decoration:underline}
 .admin-text-link:hover{color:#3f6e4d}
 .admin-row-action{background:#eff4ec}
 .admin-row-action:hover{background:#e4eddf;color:#456f50}
@@ -403,18 +405,36 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .profile-empty-experiments{display:flex;align-items:center;justify-content:center;min-height:82px;margin:0;border:1px dashed #e2e9df;border-radius:10px;background:#fafbf9;color:#869188;font-size:13px;text-align:center}
 .profile-empty-experiments a{margin-left:4px;color:#568267;font-weight:700;text-decoration:none}
 .profile-empty-experiments a:hover{color:#3f6e4d;text-decoration:underline}
+.profile-experiment-error{margin:0;padding:14px;border:1px solid #f1d7d4;border-radius:9px;background:#fff8f7;color:#b24b42;font-size:12px}
+.profile-experiment-list{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.profile-experiment-list li{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid #e8eee6;border-radius:9px;background:#fbfcfa}
+.profile-experiment-main,.profile-experiment-meta{display:grid;min-width:0;gap:5px}
+.profile-experiment-main strong{overflow:hidden;color:#3c5143;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.profile-experiment-main span,.profile-experiment-meta{color:#849087;font-size:11px}
+.profile-experiment-meta{text-align:right;white-space:nowrap}
+.profile-refresh:disabled{opacity:.55;cursor:wait}
 .profile-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .profile-stat{display:grid;align-content:center;gap:9px;min-height:82px;padding:13px 15px;border:1px solid #e3ebe5;border-radius:9px;background:#eef4f3}
 .profile-stat>span{color:#73847a;font-size:11px}
 .profile-stat>strong{color:#3f6650;font-size:22px;font-weight:750;line-height:1}
+.profile-stat:first-child>strong{overflow:hidden;font-size:14px;line-height:1.45;text-overflow:ellipsis}
 @media(max-width:760px){.profile-summary-grid{grid-template-columns:1fr;gap:13px}.profile-summary-card{padding:18px}.profile-stat-grid{gap:8px}.profile-stat{padding:12px 10px}}
 @media(max-width:420px){.profile-stat-grid{grid-template-columns:1fr}.profile-stat{min-height:65px;grid-template-columns:1fr auto;align-items:center}.profile-stat>strong{font-size:20px}}
-.admin-role-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.admin-role-card{padding:21px 22px}
-.admin-role-card-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:17px}
-.admin-role-icon{display:grid;width:38px;height:38px;place-items:center;border-radius:11px;background:#edf3e9;color:#628269;font-size:13px;font-weight:800}
-.admin-role-type{padding:5px 8px;border-radius:999px;background:#f0f4ee;color:#7a8c7c;font-size:10px;font-weight:650}
-.admin-role-card h2{margin:0 0 8px;color:#304438;font-size:17px}
+.admin-role-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:16px}
+.admin-role-list-card{min-width:0;margin-bottom:16px;padding:17px 19px}
+.admin-role-list-card .admin-card-heading{margin-bottom:10px}
+.admin-role-table th:last-child,.admin-role-table td:last-child{width:115px}
+.admin-role-toggle{display:inline-flex;align-items:center;gap:7px;padding:2px 0;border:0;background:transparent;color:#718576;font:inherit;font-size:11px;cursor:pointer}
+.admin-role-toggle.is-enabled{color:#4f795a}
+.admin-role-toggle.is-disabled{color:#8b918a}
+.admin-role-switch{position:relative;display:inline-flex;width:30px;height:17px;align-items:center;padding:2px;border-radius:999px;background:#c7cec7;transition:background .16s}
+.admin-role-switch>span{width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(35,50,37,.2);transition:transform .16s}
+.admin-role-toggle.is-enabled .admin-role-switch{background:#719879}
+.admin-role-toggle.is-enabled .admin-role-switch>span{transform:translateX(13px)}
+.admin-role-toggle:hover:not(:disabled) .admin-role-switch{box-shadow:0 0 0 3px rgba(86,130,103,.12)}
+.admin-role-toggle:disabled{opacity:.55;cursor:not-allowed}
+.admin-role-toggle:focus-visible{outline:2px solid #85a98a;outline-offset:3px;border-radius:3px}
+@media(max-width:760px){.admin-role-columns{grid-template-columns:1fr}}
 
 :root{--app-topbar-height:74px}
 .workspace{height:calc(100vh - var(--app-topbar-height))}
@@ -422,12 +442,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media(max-width:760px){
   :root{--app-topbar-height:90px}
 }
-.admin-role-card>p{min-height:38px;margin:0;color:#7a877d;font-size:12px;line-height:1.75}
-.admin-role-count{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:13px;border-top:1px solid #edf0ea;color:#7a877d;font-size:11px}
-.admin-role-count strong{color:#52765b;font-size:18px}
-.admin-role-note{margin:14px 0;color:#869188;font-size:11px;line-height:1.6}
 .admin-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-@media(max-width:600px){.admin-role-grid{grid-template-columns:1fr}.admin-role-card{padding:18px}}
 .experiment-page-heading{align-items:center}
 .experiment-page-heading .btn{display:inline-flex;align-items:center;gap:7px;min-height:40px}
 .experiment-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 17px;border:1px solid #e6ebe3;border-radius:10px;background:rgba(255,255,255,.9)}
@@ -439,6 +454,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .experiment-list-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 19px;border-bottom:1px solid #e9ede6}
 .experiment-list-heading h2{margin:0;color:#304438;font-size:15px}
 .experiment-list-heading span{color:#87938a;font-size:12px}
+.experiment-batch-actions{display:flex;align-items:center;gap:12px}
+.experiment-batch-actions .btn{min-width:88px}
 .experiment-table-scroll{overflow:auto}
 .experiment-table{min-width:1160px;font-size:12px}
 .experiment-table th{padding:12px 10px;background:#f6f8f4;color:#758176;font-size:11px;font-weight:700}
@@ -528,6 +545,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .class-row-actions{display:flex;gap:6px}
 .class-row-action{display:grid;width:30px;height:30px;place-items:center;border:1px solid #e2e9df;border-radius:6px;background:#fff;color:#5e7863;font-size:15px;line-height:1;cursor:pointer}
 .class-row-action:hover{border-color:#bfd2ba;background:#f1f6ef;color:#47765d}
+.class-row-action.class-row-message{color:#4779c3}
+.class-row-action.class-row-message:hover{border-color:#c5d8f3;background:#f1f6ff;color:#245eb7}
 .class-row-action.class-row-delete{color:#b95750;font-size:19px}
 .class-row-action:disabled{opacity:.5;cursor:wait}
 .class-modal-backdrop{position:fixed;inset:0;z-index:60;display:grid;place-items:center;overflow-y:auto;padding:22px;background:rgba(23,39,29,.48);backdrop-filter:blur(3px)}
@@ -581,6 +600,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .student-filter-actions .btn-primary,.student-add-button{border-color:#2563eb;background:#2563eb;color:#fff}
 .student-filter-actions .btn-primary:hover,.student-add-button:hover{border-color:#1d4ed8;background:#1d4ed8}
 .student-management-content>.status{margin:10px 0}
+.student-management-content{position:relative}
+.student-management-content.student-drop-active{outline:2px dashed #4c8f68;outline-offset:6px;border-radius:12px}
+.student-drop-hint{position:sticky;top:8px;z-index:6;display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:12px;padding:18px;border:2px dashed #63a983;border-radius:12px;background:rgba(238,248,241,.96);color:#2f6b4c;text-align:center;pointer-events:none}
+.student-drop-hint b{font-size:15px}
+.student-drop-hint span{font-size:12px;color:#5f7d68}
 .student-list-panel{min-width:0;padding:0;border:1px solid #e6ebe3;border-radius:11px;background:#fff;box-shadow:0 6px 20px rgba(58,79,59,.035)}
 .student-table-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 15px;border-bottom:1px solid #e9ede6}
 .student-table-toolbar h2{display:flex;align-items:center;gap:8px;flex:0 0 auto;margin:0;color:#304438;font-size:14px}
@@ -594,9 +618,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .student-list-table th{padding:11px 10px;border-bottom:1px solid #e8ede5;background:#f6f8f4;color:#758176;font-size:11px;font-weight:700;white-space:nowrap}
 .student-list-table td{padding:12px 10px;border-bottom:1px solid #edf0ea;color:#58675d;vertical-align:middle;white-space:nowrap}
 .student-list-table tbody tr:last-child td{border-bottom:0}
+.student-list-table th:first-child,.student-list-table td:first-child{width:38px;text-align:center}
+.student-list-table input[type=checkbox]{width:15px;height:15px;accent-color:#2563eb;vertical-align:middle}
 .student-table-compact td{padding-top:7px;padding-bottom:7px}
 .student-name-cell{color:#34483a!important;font-weight:700}
 .student-row-actions{display:flex;gap:6px}
+.student-selection-count{color:#58725e;font-size:12px;font-weight:700;white-space:nowrap}
+.student-batch-delete{color:#b95750}
+.student-batch-delete:hover:not(:disabled){border-color:#e8c8c3;background:#fff7f6;color:#a33f37}
+.student-batch-class-toggle{grid-column:1/-1;display:flex!important;align-items:center;gap:8px!important}
+.student-batch-class-toggle input{width:16px!important;height:16px!important;accent-color:#2563eb}
+.class-form-grid input:disabled{background:#f4f6f2;color:#8a958b;cursor:not-allowed}
 .student-management-content .admin-user-form{margin-top:16px}
 @media(max-width:1050px){.student-management-layout{grid-template-columns:190px minmax(0,1fr);gap:12px}.student-table-toolbar{align-items:flex-start;flex-direction:column}.student-table-tools{justify-content:flex-start}}
 @media(max-width:760px){
@@ -615,3 +647,156 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .student-tool-text{padding:6px 7px;font-size:10px}
   .student-list-table{min-width:860px}
 }
+
+/* ---------- 实验类型管理 ---------- */
+.type-page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:18px}
+.type-page-heading h1{margin:0 0 7px;color:#1c2b40;font-size:25px;letter-spacing:-.4px}
+.type-page-heading p:not(.admin-eyebrow){margin:0;color:#8490a1;font-size:12px;line-height:1.6}
+.type-page-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.type-add-button{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border:1px solid #2563eb;border-radius:7px;background:#2563eb;color:#fff;font-size:12px;font-weight:700;box-shadow:0 6px 14px rgba(37,99,235,.18)}
+.type-add-button:hover{border-color:#1d4ed8;background:#1d4ed8}
+.type-tool-button{display:grid;width:36px;height:36px;place-items:center;border:1px solid #e2e9df;border-radius:7px;background:#fff;color:#687b6b;font-size:16px;line-height:1;cursor:pointer}
+.type-tool-button:hover,.type-tool-button[aria-expanded=true]{border-color:#bfd2ba;background:#f1f6ef;color:#47765d}
+.type-tool-button:disabled{opacity:.5;cursor:wait}
+.type-menu-control{position:relative}
+.type-menu{position:absolute;top:calc(100% + 7px);right:0;z-index:30;display:grid;min-width:162px;gap:2px;padding:7px;border:1px solid #e2e9df;border-radius:8px;background:#fff;box-shadow:0 12px 26px rgba(37,56,41,.14)}
+.type-menu button{display:flex;align-items:center;gap:8px;padding:8px 9px;border:0;border-radius:5px;background:transparent;color:#4d5f53;font-size:12px;text-align:left;white-space:nowrap;cursor:pointer}
+.type-menu button:hover{background:#f4f7f2;color:#34694c}
+.type-menu button:disabled{opacity:.55;cursor:wait}
+.type-menu-label{padding:4px 9px 6px;color:#95a097;font-size:10px;font-weight:800;letter-spacing:.6px}
+.type-settings-menu label{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:5px;color:#536456;font-size:12px;white-space:nowrap;cursor:pointer}
+.type-settings-menu label:hover{background:#f4f7f2}
+.type-settings-menu input{accent-color:#568267}
+.type-settings-menu .type-menu-divider{margin-top:4px;border-top:1px solid #edf0ea;padding-top:9px}
+.type-list-card{padding:16px 18px 6px;border:1px solid #e6ebe3;border-radius:12px;background:#fff;box-shadow:0 6px 20px rgba(58,79,59,.035)}
+.type-list-title{display:flex;align-items:center;gap:9px;margin:0 0 12px;color:#304438;font-size:15px}
+.type-list-title span{display:inline-grid;min-width:24px;height:22px;place-items:center;padding:0 6px;border-radius:6px;background:#edf3e9;color:#628269;font-size:11px}
+.type-table{min-width:720px}
+.type-table .type-remark-cell{max-width:430px;color:#7b877d;line-height:1.6;white-space:normal}
+.type-actions-head{width:120px}
+.type-row-actions{display:flex;gap:6px}
+.type-row-action{display:grid;width:30px;height:30px;place-items:center;border:1px solid #d7e3f5;border-radius:6px;background:#fff;color:#2563eb;font-size:15px;line-height:1;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.type-row-action:hover{border-color:#a9c4ee;background:#eff5ff;color:#1d4ed8}
+.type-row-action.type-row-delete{border-color:#f3dcda;color:#d13b3b;font-size:19px}
+.type-row-action.type-row-delete:hover{border-color:#eab7b3;background:#fdf1f0;color:#b91c1c}
+.type-row-action:disabled{opacity:.45;cursor:wait}
+@media(max-width:640px){
+  .type-page-heading{align-items:flex-start}
+  .type-page-tools{width:100%;justify-content:flex-start}
+  .type-list-card{padding:13px 12px 4px}
+}
+.type-menu-backdrop{position:fixed;inset:0;z-index:25;background:transparent}
+
+/* ---------- 实验中心：由实验类型驱动的卡片（桌面端一行三个） ---------- */
+.dashboard-head-tools{display:flex;align-items:center;gap:10px;padding-bottom:4px;white-space:nowrap}
+.exp-type-count{color:#8a9787;font-size:11px}
+.exp-type-refresh{min-height:30px;padding:0 11px;border:1px solid #dce6d9;border-radius:7px;background:#fff;color:#4d7a5c;font-size:11px;font-weight:700}
+.exp-type-refresh:hover{border-color:#b6cdb1;background:#f2f7ef}
+.exp-type-refresh:disabled{opacity:.55;cursor:wait}
+.exp-type-hint{margin:-8px 0 16px;padding:9px 12px;border:1px solid #f0dfc0;border-radius:8px;background:#fff9ec;color:#8a6a2c;font-size:12px}
+.exp-type-empty{grid-column:1/-1;margin:0;padding:36px 12px;border:1px dashed #d9e3d5;border-radius:12px;background:#fff;color:#7f8c7e;font-size:13px;text-align:center}
+.experiment-grid .exp-card{display:flex;flex-direction:column;min-width:0}
+.experiment-grid .exp-body{display:flex;flex:1;flex-direction:column}
+.experiment-grid .exp-meta{margin-top:auto}
+.experiment-grid .exp-body>.btn{margin-top:2px;align-self:flex-start}
+.exp-card-new .exp-body h3{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exp-card-new .exp-body p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;min-height:0;overflow:hidden;white-space:normal}
+.exp-card-new .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exp-art.exp-art-new{background:linear-gradient(145deg,#dfece0,#f2f7ef)}
+.exp-art.exp-art-new:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(87,126,96,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(87,126,96,.09) 1px,transparent 1px);background-size:26px 26px}
+.exp-art.exp-art-new:after{content:"";position:absolute;right:-26px;bottom:-42px;width:128px;height:128px;border:1px solid rgba(87,126,96,.20);border-radius:30px;background:rgba(87,126,96,.10);transform:rotate(24deg)}
+.exp-art.exp-art-new.exp-art-hue-1{background:linear-gradient(145deg,#e2eaf5,#f3f7fc)}
+.exp-art.exp-art-new.exp-art-hue-2{background:linear-gradient(145deg,#f1e9da,#faf5ea)}
+.exp-art.exp-art-new.exp-art-hue-3{background:linear-gradient(145deg,#eae5f2,#f6f2fa)}
+.exp-art-glyph{position:absolute;left:16px;bottom:16px;z-index:2;display:grid;width:46px;height:46px;place-items:center;border:1px solid rgba(255,255,255,.9);border-radius:14px;background:rgba(255,255,255,.86);color:#4d7a5c;font-size:20px;font-weight:800;box-shadow:0 8px 18px rgba(59,79,61,.13)}
+@media(max-width:640px){.dashboard-head-tools{width:100%;justify-content:flex-start;padding-top:4px}}
+
+/* 管理后台字号整体提升，其他页面保持原有字号 */
+#adminView .admin-menu-label{font-size:12px}
+#adminView .admin-menu-group button{font-size:14px}
+#adminView .admin-menu-icon{font-size:12px}
+#adminView .admin-back-link{font-size:13px}
+#adminView .admin-breadcrumb{font-size:14px}
+#adminView .admin-refresh{font-size:13px}
+#adminView .admin-user-summary b{font-size:14px}
+#adminView .admin-user-summary small{font-size:12px}
+#adminView .admin-eyebrow{font-size:11px}
+#adminView .admin-welcome h1,#adminView .admin-page-heading h1,#adminView .type-page-heading h1{font-size:27px}
+#adminView .admin-welcome p:not(.admin-eyebrow),#adminView .admin-page-heading p:not(.admin-eyebrow),#adminView .type-page-heading p:not(.admin-eyebrow){font-size:14px}
+#adminView .admin-updated,#adminView .admin-dashboard-status{font-size:12px}
+#adminView .admin-stat-label{font-size:14px}
+#adminView .admin-stat-value{font-size:28px}
+#adminView .admin-stat-foot{font-size:11px}
+#adminView .admin-card-heading h2,#adminView .student-class-heading h2,#adminView .student-table-toolbar h2{font-size:16px}
+#adminView .admin-card-heading p{font-size:12px}
+#adminView .admin-quick-grid b{font-size:13px}
+#adminView .admin-quick-grid small{font-size:11px}
+#adminView .admin-quick-empty{font-size:13px}
+#adminView .admin-dashboard-table{font-size:13px}
+#adminView .admin-dashboard-table th{font-size:12px}
+#adminView .admin-dashboard-table td{font-size:13px}
+#adminView .admin-row-action,#adminView .admin-dashboard-edit-link{font-size:12px}
+#adminView .admin-state-tag{font-size:11px}
+#adminView .admin-role-toggle{font-size:12px}
+#adminView .admin-content>.status,#adminView .student-management-content>.status{font-size:13px}
+#adminView .admin-empty-state h1{font-size:23px}
+#adminView .admin-empty-state p{font-size:14px}
+#adminView .class-filter-form>label,#adminView .class-column-menu label,#adminView .class-form-grid label,
+#adminView .student-filter-form>label,#adminView .student-class-item,#adminView .student-class-empty,
+#adminView .type-settings-menu label,#adminView .type-menu button,#adminView .experiment-form-grid label{font-size:14px}
+#adminView .class-filter-form input,#adminView .class-column-menu label,#adminView .class-table,
+#adminView .student-class-search,#adminView .student-list-table,#adminView .type-table,
+#adminView .experiment-table{font-size:14px}
+#adminView .class-table th,#adminView .student-list-table th,
+#adminView .experiment-table th{font-size:13px}
+#adminView .class-table-toolbar h2,#adminView .type-list-title{font-size:17px}
+#adminView .class-table-toolbar h2 span,#adminView .student-table-toolbar h2 span,
+#adminView .type-list-title span{font-size:12px}
+#adminView .class-add-button,#adminView .student-add-button,#adminView .student-tool-text,
+#adminView .type-add-button,#adminView .experiment-page-heading .btn{font-size:13px}
+#adminView .class-filter-actions .btn,#adminView .student-filter-actions .btn,
+#adminView .type-page-tools .btn{font-size:13px}
+#adminView .class-column-menu label,#adminView .class-row-action,
+#adminView .type-menu-label,#adminView .type-row-action,
+#adminView .experiment-pagination,#adminView .experiment-detail-grid dt,
+#adminView .experiment-detail-grid dd{font-size:13px}
+#adminView .student-list-table td,#adminView .class-table td{font-size:14px}
+#adminView .student-class-item b{font-size:11px}
+#adminView .student-add-button{font-size:12px}
+#adminView .type-menu-label{font-size:11px}
+#adminView .type-list-title{font-size:16px}
+#adminView .experiment-table td small{font-size:11px}
+#adminView .experiment-state{font-size:11px}
+#adminView .experiment-search input,#adminView .experiment-search select{font-size:14px}
+#adminView .experiment-list-heading>span,#adminView .experiment-batch-actions>span{font-size:13px}
+#adminView .experiment-pagination .btn,#adminView .experiment-form-grid input,
+#adminView .experiment-form-grid select,#adminView .experiment-form-grid textarea,
+#adminView .experiment-modal form>footer .btn,#adminView .experiment-detail-modal>footer .btn{font-size:13px}
+#adminView .class-row-action,#adminView .type-row-action{font-size:16px}
+#adminView .class-row-action.class-row-delete,#adminView .type-row-action.type-row-delete{font-size:20px}
+@media(max-width:600px){
+  #adminView .admin-refresh{font-size:0}
+  #adminView .student-tool-text{font-size:12px}
+}
+
+/* 班级人数：由学生列表自动统计，表单中只读展示 */
+.class-auto-count{background:#f4f7f2!important;color:#5d7a62!important;font-weight:700;cursor:default}
+.class-auto-count:focus{outline:none;border-color:#dce6d9!important;box-shadow:none!important}
+.class-rename-hint{margin:0 0 14px;padding:8px 10px;border:1px solid #e3ead9;border-radius:7px;background:#f7faf4;color:#5d7a62;font-size:11px;line-height:1.6}
+
+/* 私信：仅显示真实会话，另提供新建私信入口 */
+.message-list-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.message-list-tools .btn{min-height:30px;padding:0 10px;font-size:11px;white-space:nowrap}
+.message-compose-picker{display:grid;gap:8px;margin:0 0 12px;padding:11px;border:1px solid #dfe8dc;border-radius:9px;background:#f7faf5}
+.message-compose-picker label{display:grid;gap:6px;color:#536456;font-size:11px;font-weight:700}
+.message-compose-picker select{width:100%;min-height:34px;padding:0 9px;border:1px solid #d9e3d5;border-radius:7px;background:#fff;color:#304438;font-size:12px}
+.message-compose-actions{display:flex;justify-content:flex-end;gap:6px}
+.message-compose-actions .btn{min-height:30px;padding:0 12px;font-size:11px}
+.message-compose-error{margin:0;color:#b91c1c;font-size:11px;line-height:1.5}
+.message-list-empty{margin:6px 2px;color:#8a9787;font-size:12px;line-height:1.7}
+.message-list-item.message-list-draft{border-style:dashed;background:#fff}
+@media(max-width:640px){.message-list-head{align-items:flex-start;flex-direction:column;gap:8px}}
+
+/* 学生表单：所属班级可输入新班级名（datalist 提供已有班级） */
+.admin-user-form .field input[list]{width:100%;height:40px;padding:0 12px;border:1px solid #dbe5f0;border-radius:9px;background:#fff;color:var(--ink)}
+.class-name-hint{margin:6px 0 0;color:#8a9787;font-size:11px;line-height:1.6}

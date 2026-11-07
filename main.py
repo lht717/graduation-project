@@ -88,6 +88,23 @@ def _db_conn():
     return pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor, autocommit=False)
 
 
+def _ensure_user_status_column() -> None:
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SHOW COLUMNS FROM users LIKE 'is_active'")
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1"
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+_ensure_user_status_column()
+
+
 def _public_user(user: dict) -> dict:
     is_admin = user.get("role") == "admin"
     return {
@@ -96,6 +113,7 @@ def _public_user(user: dict) -> dict:
         "display_name": user.get("display_name", user["username"]),
         "role": "admin" if is_admin else "user",
         "role_name": user.get("role_name", "管理员" if is_admin else "普通用户"),
+        "is_active": bool(user.get("is_active", True)),
         "registered_at": user.get("registered_at", ""),
         "avatar": user.get("avatar", ""),
         "class_name": user.get("class_name", ""),
@@ -106,7 +124,7 @@ def load_users() -> list:
     conn = _db_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT username, account_id, display_name, role, role_name, password_hash, registered_at, avatar, class_name FROM users")
+            cur.execute("SELECT username, account_id, display_name, role, role_name, is_active, password_hash, registered_at, avatar, class_name FROM users")
             return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
@@ -119,10 +137,10 @@ def save_users(users: list) -> None:
             cur.execute("DELETE FROM users")
             for u in users:
                 cur.execute(
-                    "INSERT INTO users (username, account_id, display_name, role, role_name, password_hash, registered_at, avatar, class_name) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    "INSERT INTO users (username, account_id, display_name, role, role_name, is_active, password_hash, registered_at, avatar, class_name) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                     (u["username"], u.get("account_id", u["username"]), u["display_name"],
-                     u.get("role", "user"), u.get("role_name", "普通用户"),
+                     u.get("role", "user"), u.get("role_name", "普通用户"), 1 if u.get("is_active", True) else 0,
                      u["password_hash"], u.get("registered_at", ""), u.get("avatar", ""),
                      u.get("class_name", "")),
                 )
@@ -178,6 +196,7 @@ if not users:
         {
             "username": "admin", "account_id": "20240000",
             "display_name": "系统管理员", "role": "admin", "role_name": "管理员",
+            "is_active": True,
             "password_hash": _hash_password("admin123"),
             "registered_at": "2024-06-01T10:00:00+08:00",
             "avatar": "/static/avatar_default.png",
@@ -186,6 +205,7 @@ if not users:
         {
             "username": "demo", "account_id": "20240001",
             "display_name": "演示用户", "role": "user", "role_name": "普通用户",
+            "is_active": True,
             "password_hash": _hash_password("fusionlab"),
             "registered_at": "2025-01-15T08:30:00+08:00",
             "avatar": "/static/avatar_default.png",
@@ -210,6 +230,8 @@ def _current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="请先登录")
     for user in users:
         if user["username"] == username:
+            if not user.get("is_active", True):
+                raise HTTPException(status_code=403, detail="账号已停用")
             return user
     raise HTTPException(status_code=401, detail="会话已失效，请重新登录")
 
@@ -232,6 +254,8 @@ async def login(request: Request):
     user = next((u for u in users if u["username"] == username), None)
     if not user or user["password_hash"] != _hash_password(password):
         raise HTTPException(status_code=401, detail="账号或密码错误")
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=403, detail="账号已停用，请联系管理员")
     token = secrets.token_hex(16)
     with data_lock:
         auth_sessions[token] = user["username"]
@@ -354,6 +378,7 @@ async def admin_create_user(request: Request):
             "display_name": display_name,
             "role": "user",
             "role_name": "普通用户",
+            "is_active": True,
             "password_hash": _hash_password(password),
             "registered_at": _now_iso(),
             "avatar": "/static/avatar_default.png",
@@ -411,6 +436,63 @@ async def admin_update_user(username: str, request: Request):
     raise HTTPException(status_code=404, detail="用户不存在")
 
 
+@app.put("/api/admin/users/{username}/role")
+async def admin_promote_user(username: str, request: Request):
+    _admin_only(request)
+    with data_lock:
+        user = next((item for item in users if item["username"] == username), None)
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        if user["role"] == "admin":
+            raise HTTPException(status_code=400, detail="该账号已经是管理员")
+        previous_role = user["role"]
+        previous_role_name = user.get("role_name")
+        user["role"] = "admin"
+        user["role_name"] = "管理员"
+        try:
+            save_users(users)
+        except Exception:
+            user["role"] = previous_role
+            user["role_name"] = previous_role_name
+            raise
+        return {"user": _public_user(user), "message": "用户已提升为管理员"}
+
+
+@app.put("/api/admin/users/{username}/status")
+async def admin_set_user_status(username: str, request: Request):
+    acting_user = _admin_only(request)
+    body = await request.json()
+    is_active = body.get("is_active")
+    if not isinstance(is_active, bool):
+        raise HTTPException(status_code=400, detail="账号状态必须为布尔值")
+    with data_lock:
+        target = next((item for item in users if item["username"] == username), None)
+        if not target:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        if target["role"] != "admin":
+            raise HTTPException(status_code=400, detail="该操作仅适用于管理员账号")
+        if not is_active:
+            if acting_user["username"] == username:
+                raise HTTPException(status_code=400, detail="不能停用当前登录的管理员账号")
+            active_admins = [
+                item for item in users
+                if item["role"] == "admin" and item.get("is_active", True)
+            ]
+            if len(active_admins) <= 1:
+                raise HTTPException(status_code=400, detail="不能停用最后一位启用中的管理员")
+        previous_status = target.get("is_active", True)
+        target["is_active"] = is_active
+        try:
+            save_users(users)
+        except Exception:
+            target["is_active"] = previous_status
+            raise
+        return {
+            "user": _public_user(target),
+            "message": "管理员账号已启用" if is_active else "管理员账号已停用",
+        }
+
+
 @app.delete("/api/admin/users/{username}")
 async def admin_delete_user(username: str, request: Request):
     _admin_only(request)
@@ -455,6 +537,50 @@ def _ensure_class_table() -> None:
 
 
 _ensure_class_table()
+
+
+def _sync_class_student_counts(cur) -> None:
+    """把班级人数同步为学生表中的真实人数（管理员账号不计入）。
+
+    班级人数属于派生数据，统一以 users 表为准，避免新增/删除/导入学生后
+    班级管理页仍显示手工填写的旧值。
+    """
+    cur.execute(
+        "UPDATE classes c SET c.student_count = ("
+        "  SELECT COUNT(*) FROM users u "
+        "  WHERE u.class_name = c.name AND COALESCE(u.role, '') <> 'admin'"
+        ")"
+    )
+
+
+def _ensure_classes_from_users(cur) -> None:
+    """把学生表中出现、但 classes 表还没有的班级自动补建。
+
+    覆盖所有创建/编辑学生的入口（页面手动新增、批量导入、直接调用 API）：
+    只要读取班级列表，缺失班级就会补齐，人数随后由
+    _sync_class_student_counts 统一统计。年级默认「未设置」，可在班级管理页修改。
+    """
+    cur.execute(
+        "SELECT DISTINCT u.class_name FROM users u "
+        "WHERE COALESCE(u.class_name, '') <> '' AND COALESCE(u.role, '') <> 'admin' "
+        "AND NOT EXISTS (SELECT 1 FROM classes c WHERE c.name = u.class_name)"
+    )
+    missing = [
+        row["class_name"].strip()
+        for row in cur.fetchall()
+        if (row["class_name"] or "").strip()
+    ]
+    if not missing:
+        return
+    cur.execute("SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM classes")
+    next_sort = int(list(cur.fetchone().values())[0] or 0)
+    for name in missing:
+        next_sort += 1
+        cur.execute(
+            "INSERT INTO classes (name, grade, student_count, sort_order, created_at, remark) "
+            "VALUES (%s, %s, 0, %s, %s, %s)",
+            (name, "未设置", next_sort, _now_iso(), "创建学生时自动补建"),
+        )
 
 
 def _class_public(row: dict) -> dict:
@@ -515,11 +641,15 @@ async def admin_list_classes(request: Request, keyword: str = "", grade: str = "
     conn = _db_conn()
     try:
         with conn.cursor() as cur:
+            _ensure_classes_from_users(cur)
+            _sync_class_student_counts(cur)
             cur.execute(
                 f"SELECT {', '.join(CLASS_COLUMNS)}, id FROM classes {where} ORDER BY sort_order ASC, id DESC",
                 params,
             )
-            return {"classes": [_class_public(row) for row in cur.fetchall()]}
+            classes = [_class_public(row) for row in cur.fetchall()]
+        conn.commit()
+        return {"classes": classes}
     finally:
         conn.close()
 
@@ -540,7 +670,9 @@ async def admin_create_class(request: Request):
                 f"INSERT INTO classes ({', '.join(CLASS_COLUMNS)}) VALUES ({placeholders})",
                 tuple(values[column] for column in CLASS_COLUMNS),
             )
-            row = _class_by_id(cur, cur.lastrowid)
+            class_id = cur.lastrowid
+            _sync_class_student_counts(cur)
+            row = _class_by_id(cur, class_id)
         conn.commit()
     finally:
         conn.close()
@@ -551,27 +683,52 @@ async def admin_create_class(request: Request):
 async def admin_update_class(class_id: int, request: Request):
     _admin_only(request)
     body = await request.json()
+    message = "班级信息已更新"
     conn = _db_conn()
     try:
-        with conn.cursor() as cur:
-            row = _class_by_id(cur, class_id)
-            if not row:
-                raise HTTPException(status_code=404, detail="班级不存在")
-            values = _class_values(body, _class_public(row))
-            if not values["name"] or not values["grade"]:
-                raise HTTPException(status_code=400, detail="班级名称和年级不能为空")
-            if len(values["name"]) > 128 or len(values["grade"]) > 32 or len(values["remark"]) > 500:
-                raise HTTPException(status_code=400, detail="班级字段长度超出限制")
-            assignments = ", ".join(f"{column} = %s" for column in CLASS_COLUMNS)
-            cur.execute(
-                f"UPDATE classes SET {assignments} WHERE id = %s",
-                tuple(values[column] for column in CLASS_COLUMNS) + (class_id,),
-            )
-            updated = _class_by_id(cur, class_id)
-        conn.commit()
+        # 改名要同时改 users 表和内存缓存；与用户相关接口共用 data_lock，
+        # 避免 save_users() 用旧缓存把刚改好的所属班级覆盖回数据库。
+        with data_lock:
+            with conn.cursor() as cur:
+                row = _class_by_id(cur, class_id)
+                if not row:
+                    raise HTTPException(status_code=404, detail="班级不存在")
+                old_name = row["name"] or ""
+                values = _class_values(body, _class_public(row))
+                if not values["name"] or not values["grade"]:
+                    raise HTTPException(status_code=400, detail="班级名称和年级不能为空")
+                if len(values["name"]) > 128 or len(values["grade"]) > 32 or len(values["remark"]) > 500:
+                    raise HTTPException(status_code=400, detail="班级字段长度超出限制")
+                new_name = values["name"]
+                renamed_count = 0
+                if new_name != old_name:
+                    cur.execute(
+                        "SELECT id FROM classes WHERE name = %s AND id <> %s",
+                        (new_name, class_id),
+                    )
+                    if cur.fetchone():
+                        raise HTTPException(status_code=400, detail="班级名称已存在")
+                assignments = ", ".join(f"{column} = %s" for column in CLASS_COLUMNS)
+                cur.execute(
+                    f"UPDATE classes SET {assignments} WHERE id = %s",
+                    tuple(values[column] for column in CLASS_COLUMNS) + (class_id,),
+                )
+                if new_name != old_name:
+                    renamed_count = cur.execute(
+                        "UPDATE users SET class_name = %s WHERE class_name = %s",
+                        (new_name, old_name),
+                    )
+                _sync_class_student_counts(cur)
+                updated = _class_by_id(cur, class_id)
+            conn.commit()
+            if new_name != old_name:
+                for user in users:
+                    if (user.get("class_name") or "") == old_name:
+                        user["class_name"] = new_name
+                message = f"班级信息已更新，已同步 {renamed_count} 个账号的所属班级"
     finally:
         conn.close()
-    return {"class": _class_public(updated), "message": "班级信息已更新"}
+    return {"class": _class_public(updated), "message": message}
 
 
 @app.delete("/api/admin/classes/{class_id}")
@@ -589,15 +746,201 @@ async def admin_delete_class(class_id: int, request: Request):
     return {"success": True, "message": "班级已删除"}
 
 
+# ---------- 实验类型管理 API（管理员增删改查） ----------
+EXPERIMENT_TYPE_COLUMNS = ("name", "sort_order", "created_at", "remark")
+
+# 与「实验中心」页展示的三个实验保持一致，数据库为空时自动补齐
+DEFAULT_EXPERIMENT_TYPES = (
+    ("智能汽车视觉感知实验", 1, "CARLA 城市道路 · UFLD 车道线检测 · YOLO 目标检测 · 自动驾驶状态监控"),
+    ("仓储 AGV 实验", 2, "仓储物流 AGV 场景，后续场景适配阶段开放"),
+    ("巡检机器人实验", 3, "巡检机器人场景，机器人仿真适配完成后开放"),
+)
+
+
+def _ensure_experiment_type_table() -> None:
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """CREATE TABLE IF NOT EXISTS experiment_types (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    name VARCHAR(128) NOT NULL,
+                    sort_order INT NOT NULL DEFAULT 0,
+                    created_at VARCHAR(64) NOT NULL DEFAULT '',
+                    remark VARCHAR(500) NOT NULL DEFAULT '',
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uk_experiment_type_name (name)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"""
+            )
+            cur.execute("SELECT COUNT(*) AS total FROM experiment_types")
+            if int(cur.fetchone()["total"] or 0) == 0:
+                cur.executemany(
+                    "INSERT INTO experiment_types (name, sort_order, created_at, remark) "
+                    "VALUES (%s, %s, %s, %s)",
+                    [(name, order, _now_iso(), remark) for name, order, remark in DEFAULT_EXPERIMENT_TYPES],
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+_ensure_experiment_type_table()
+
+
+def _experiment_type_public(row: dict) -> dict:
+    return {
+        "id": int(row["id"]),
+        "name": row["name"] or "",
+        "sort_order": int(row["sort_order"] or 0),
+        "created_at": row["created_at"] or "",
+        "remark": row["remark"] or "",
+    }
+
+
+def _experiment_type_values(body: dict, base: dict = None) -> dict:
+    source = dict(base or {})
+    source.update(body or {})
+    try:
+        sort_order = int(source.get("sort_order") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="排序必须为整数")
+    if sort_order < 0:
+        raise HTTPException(status_code=400, detail="排序不能小于 0")
+    return {
+        "name": str(source.get("name") or "").strip(),
+        "sort_order": sort_order,
+        "created_at": str(source.get("created_at") or _now_iso()).strip(),
+        "remark": str(source.get("remark") or "").strip(),
+    }
+
+
+def _experiment_type_by_id(cur, type_id: int) -> dict:
+    cur.execute(
+        f"SELECT {', '.join(EXPERIMENT_TYPE_COLUMNS)}, id FROM experiment_types WHERE id = %s",
+        (type_id,),
+    )
+    return cur.fetchone()
+
+
+def _validate_experiment_type(values: dict) -> None:
+    if not values["name"]:
+        raise HTTPException(status_code=400, detail="实验类型名称不能为空")
+    if len(values["name"]) > 128:
+        raise HTTPException(status_code=400, detail="实验类型名称不能超过 128 个字符")
+    if len(values["remark"]) > 500:
+        raise HTTPException(status_code=400, detail="备注不能超过 500 个字符")
+
+
+def _assert_type_name_available(cur, name: str, exclude_id: int = 0) -> None:
+    cur.execute(
+        "SELECT id FROM experiment_types WHERE name = %s AND id <> %s",
+        (name, exclude_id),
+    )
+    if cur.fetchone():
+        raise HTTPException(status_code=400, detail=f"实验类型“{name}”已存在")
+
+
+@app.get("/api/experiment-types")
+async def list_experiment_types(request: Request):
+    """实验中心页读取实验类型卡片：与「实验类型」管理页共用同一张表。"""
+    _current_user(request)
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {', '.join(EXPERIMENT_TYPE_COLUMNS)}, id FROM experiment_types "
+                "ORDER BY sort_order ASC, id ASC"
+            )
+            rows = cur.fetchall()
+            return {"experiment_types": [_experiment_type_public(row) for row in rows]}
+    finally:
+        conn.close()
+
+
+@app.get("/api/admin/experiment-types")
+async def admin_list_experiment_types(request: Request):
+    _admin_only(request)
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {', '.join(EXPERIMENT_TYPE_COLUMNS)}, id FROM experiment_types "
+                "ORDER BY sort_order ASC, id ASC"
+            )
+            rows = cur.fetchall()
+            return {"experiment_types": [_experiment_type_public(row) for row in rows]}
+    finally:
+        conn.close()
+
+
+@app.post("/api/admin/experiment-types")
+async def admin_create_experiment_type(request: Request):
+    _admin_only(request)
+    values = _experiment_type_values(await request.json())
+    _validate_experiment_type(values)
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            _assert_type_name_available(cur, values["name"])
+            placeholders = ", ".join(["%s"] * len(EXPERIMENT_TYPE_COLUMNS))
+            cur.execute(
+                f"INSERT INTO experiment_types ({', '.join(EXPERIMENT_TYPE_COLUMNS)}) "
+                f"VALUES ({placeholders})",
+                tuple(values[column] for column in EXPERIMENT_TYPE_COLUMNS),
+            )
+            row = _experiment_type_by_id(cur, cur.lastrowid)
+        conn.commit()
+    finally:
+        conn.close()
+    return {"experiment_type": _experiment_type_public(row), "message": "实验类型已新增"}
+
+
+@app.put("/api/admin/experiment-types/{type_id}")
+async def admin_update_experiment_type(type_id: int, request: Request):
+    _admin_only(request)
+    body = await request.json()
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            row = _experiment_type_by_id(cur, type_id)
+            if not row:
+                raise HTTPException(status_code=404, detail="实验类型不存在")
+            values = _experiment_type_values(body, _experiment_type_public(row))
+            _validate_experiment_type(values)
+            _assert_type_name_available(cur, values["name"], type_id)
+            assignments = ", ".join(f"{column} = %s" for column in EXPERIMENT_TYPE_COLUMNS)
+            cur.execute(
+                f"UPDATE experiment_types SET {assignments} WHERE id = %s",
+                tuple(values[column] for column in EXPERIMENT_TYPE_COLUMNS) + (type_id,),
+            )
+            updated = _experiment_type_by_id(cur, type_id)
+        conn.commit()
+    finally:
+        conn.close()
+    return {"experiment_type": _experiment_type_public(updated), "message": "实验类型已更新"}
+
+
+@app.delete("/api/admin/experiment-types/{type_id}")
+async def admin_delete_experiment_type(type_id: int, request: Request):
+    _admin_only(request)
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            row = _experiment_type_by_id(cur, type_id)
+            if not row:
+                raise HTTPException(status_code=404, detail="实验类型不存在")
+            cur.execute("DELETE FROM experiment_types WHERE id = %s", (type_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"success": True, "message": "实验类型已删除"}
+
+
 # ---------- 实验数据管理 API（管理员增删改查） ----------
 EXPERIMENT_COLUMNS = (
-    "name", "experiment_type", "description", "duration_seconds", "speed", "acceleration",
+    "name", "experiment_type", "operator_name", "operator_username", "description",
+    "duration_seconds", "speed", "acceleration",
     "throttle", "yaw", "front_fps", "created_at", "is_active",
-)
-EXPERIMENT_TYPES = (
-    "智能汽车视觉感知实验",
-    "仓储 AGV 实验",
-    "巡检机器人实验",
 )
 
 
@@ -606,6 +949,8 @@ def _experiment_public(row: dict) -> dict:
         "id": int(row["id"]),
         "name": row["name"] or "",
         "experiment_type": row.get("experiment_type") or "",
+        "operator_name": row.get("operator_name") or "",
+        "operator_username": row.get("operator_username") or "",
         "description": row.get("description") or "",
         "duration_seconds": int(row["duration_seconds"] or 0),
         "speed": float(row["speed"] or 0),
@@ -642,6 +987,8 @@ def _experiment_values(body: dict, base: dict = None) -> dict:
     return {
         "name": _str("name"),
         "experiment_type": _str("experiment_type"),
+        "operator_name": _str("operator_name"),
+        "operator_username": _str("operator_username"),
         "description": _str("description"),
         "duration_seconds": _int("duration_seconds"),
         "speed": _float("speed"),
@@ -704,19 +1051,88 @@ def _ensure_experiment_description_column() -> None:
         conn.close()
 
 
+def _ensure_experiment_operator_name_column() -> None:
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SHOW COLUMNS FROM experiments LIKE 'operator_name'")
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE experiments ADD COLUMN operator_name VARCHAR(64) NOT NULL DEFAULT ''"
+                )
+            cur.execute("SHOW COLUMNS FROM experiments LIKE 'student_name'")
+            if cur.fetchone():
+                cur.execute(
+                    "UPDATE experiments SET operator_name = student_name "
+                    "WHERE operator_name = '' AND student_name <> ''"
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_experiment_operator_username_column() -> None:
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SHOW COLUMNS FROM experiments LIKE 'operator_username'")
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE experiments ADD COLUMN operator_username VARCHAR(64) NOT NULL DEFAULT ''"
+                )
+            operator_owners = {}
+            ambiguous_names = set()
+            for account in users:
+                username = account["username"]
+                for operator_name in {
+                    username,
+                    str(account.get("display_name") or "").strip(),
+                }:
+                    if not operator_name:
+                        continue
+                    owner = operator_owners.get(operator_name)
+                    if owner and owner != username:
+                        ambiguous_names.add(operator_name)
+                    else:
+                        operator_owners[operator_name] = username
+            for operator_name, username in operator_owners.items():
+                if operator_name in ambiguous_names:
+                    continue
+                cur.execute(
+                    "UPDATE experiments SET operator_username = %s "
+                    "WHERE operator_username = '' AND operator_name = %s",
+                    (username, operator_name),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 _ensure_experiment_status_column()
 _ensure_experiment_type_column()
 _ensure_experiment_description_column()
+_ensure_experiment_operator_name_column()
+_ensure_experiment_operator_username_column()
 
 
 @app.get("/api/admin/experiments")
 async def admin_list_experiments(request: Request, keyword: str = "", experiment_type: str = ""):
     _admin_only(request)
-    if experiment_type and experiment_type not in EXPERIMENT_TYPES:
-        raise HTTPException(status_code=400, detail="实验类型无效")
     conn = _db_conn()
     try:
         with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT experiment_type FROM experiments "
+                "WHERE TRIM(experiment_type) <> '' ORDER BY experiment_type"
+            )
+            used_types = [row["experiment_type"] for row in cur.fetchall()]
+            # 实验类型以下拉列表形式提供给「新增/编辑实验」使用：
+            # 优先使用「实验类型管理」中维护的类型，再补充实验记录中已出现但未维护的类型。
+            cur.execute("SELECT name FROM experiment_types ORDER BY sort_order ASC, id ASC")
+            experiment_types = [row["name"] for row in cur.fetchall()]
+            for used_type in used_types:
+                if used_type not in experiment_types:
+                    experiment_types.append(used_type)
             sql = f"SELECT {', '.join(EXPERIMENT_COLUMNS)}, id FROM experiments WHERE 1=1"
             params = []
             if keyword:
@@ -727,7 +1143,56 @@ async def admin_list_experiments(request: Request, keyword: str = "", experiment
                 params.append(experiment_type)
             sql += " ORDER BY id DESC"
             cur.execute(sql, params)
-            return {"experiments": [_experiment_public(row) for row in cur.fetchall()]}
+            return {
+                "experiments": [_experiment_public(row) for row in cur.fetchall()],
+                "experiment_types": experiment_types,
+            }
+    finally:
+        conn.close()
+
+
+@app.get("/api/users/me/experiments")
+async def user_experiment_summary(request: Request):
+    user = _current_user(request)
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS experiment_count, "
+                "COALESCE(SUM(duration_seconds), 0) AS total_duration_seconds "
+                "FROM experiments WHERE operator_username = %s",
+                (user["username"],),
+            )
+            summary = cur.fetchone()
+            cur.execute(
+                "SELECT DISTINCT experiment_type FROM experiments "
+                "WHERE operator_username = %s AND TRIM(experiment_type) <> '' "
+                "ORDER BY experiment_type",
+                (user["username"],),
+            )
+            experiment_types = [row["experiment_type"] for row in cur.fetchall()]
+            cur.execute(
+                "SELECT id, name, experiment_type, duration_seconds, created_at, is_active "
+                "FROM experiments WHERE operator_username = %s ORDER BY id DESC LIMIT 5",
+                (user["username"],),
+            )
+            experiments = [
+                {
+                    "id": int(row["id"]),
+                    "name": row["name"] or "",
+                    "experiment_type": row["experiment_type"] or "",
+                    "duration_seconds": int(row["duration_seconds"] or 0),
+                    "created_at": row["created_at"] or "",
+                    "is_active": bool(row.get("is_active", 0)),
+                }
+                for row in cur.fetchall()
+            ]
+            return {
+                "experiments": experiments,
+                "experiment_types": experiment_types,
+                "experiment_count": int(summary["experiment_count"] or 0),
+                "total_duration_seconds": int(summary["total_duration_seconds"] or 0),
+            }
     finally:
         conn.close()
 
@@ -739,8 +1204,10 @@ async def admin_create_experiment(request: Request):
     values = _experiment_values(body)
     if not values["name"]:
         raise HTTPException(status_code=400, detail="实验名称不能为空")
-    if values["experiment_type"] not in EXPERIMENT_TYPES:
-        raise HTTPException(status_code=400, detail="请选择有效的实验类型")
+    if not values["experiment_type"]:
+        raise HTTPException(status_code=400, detail="实验类型不能为空")
+    if len(values["experiment_type"]) > 64:
+        raise HTTPException(status_code=400, detail="实验类型不能超过 64 个字符")
     if not values["description"]:
         raise HTTPException(status_code=400, detail="实验简介不能为空")
     if len(values["description"]) > 2000:
@@ -771,6 +1238,8 @@ async def save_experiment_record(request: Request):
     user = _current_user(request)
     body = await request.json()
     values = _experiment_values(body)
+    values["operator_name"] = str(user.get("display_name") or user["username"]).strip()
+    values["operator_username"] = user["username"]
     if not values["name"]:
         values["name"] = f"{user.get('display_name') or user['username']} 的实验 {_now_iso()[:19].replace('T', ' ')}"
     values["is_active"] = 1
@@ -803,8 +1272,10 @@ async def admin_update_experiment(exp_id: int, request: Request):
             values = _experiment_values(body, _experiment_public(row))
             if not values["name"]:
                 raise HTTPException(status_code=400, detail="实验名称不能为空")
-            if values["experiment_type"] not in EXPERIMENT_TYPES:
-                raise HTTPException(status_code=400, detail="请选择有效的实验类型")
+            if not values["experiment_type"]:
+                raise HTTPException(status_code=400, detail="实验类型不能为空")
+            if len(values["experiment_type"]) > 64:
+                raise HTTPException(status_code=400, detail="实验类型不能超过 64 个字符")
             if not values["description"]:
                 raise HTTPException(status_code=400, detail="实验简介不能为空")
             if len(values["description"]) > 2000:

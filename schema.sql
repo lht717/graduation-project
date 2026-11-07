@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `display_name`   varchar(128) NOT NULL COMMENT '显示名（自定义名称）',
   `role`           varchar(16)  NOT NULL DEFAULT 'user' COMMENT '角色：admin=管理员 / user=普通用户',
   `role_name`      varchar(32)  NOT NULL DEFAULT '普通用户' COMMENT '角色显示名',
+  `is_active`      tinyint(1)   NOT NULL DEFAULT 1 COMMENT '账号是否启用',
   `password_hash`  varchar(128) NOT NULL COMMENT '密码（加盐哈希）',
   `registered_at`  varchar(64)  NOT NULL DEFAULT '' COMMENT '注册时间',
   `avatar`         varchar(255) NOT NULL DEFAULT '' COMMENT '头像URL',
@@ -43,6 +44,8 @@ CREATE TABLE IF NOT EXISTS `experiments` (
   `id`                bigint       NOT NULL AUTO_INCREMENT COMMENT '实验ID',
   `name`              varchar(128) NOT NULL COMMENT '实验名称',
   `experiment_type`   varchar(64)  NOT NULL DEFAULT '' COMMENT '实验类型',
+  `operator_name`     varchar(64)  NOT NULL DEFAULT '' COMMENT '操作人员名称',
+  `operator_username` varchar(64)  NOT NULL DEFAULT '' COMMENT '操作账号',
   `description`       varchar(2000) NOT NULL DEFAULT '' COMMENT '实验简介',
   `duration_seconds`  int          NOT NULL DEFAULT 0 COMMENT '实验时长（秒）',
   `speed`             double       NOT NULL DEFAULT 0 COMMENT '车辆速度（km/h）',
@@ -60,9 +63,26 @@ CREATE TABLE IF NOT EXISTS `classes` (
   `id`             bigint        NOT NULL AUTO_INCREMENT COMMENT '班级ID',
   `name`           varchar(128)  NOT NULL COMMENT '班级名称',
   `grade`          varchar(32)   NOT NULL COMMENT '年级',
-  `student_count`  int           NOT NULL DEFAULT 0 COMMENT '班级人数',
+  `student_count`  int           NOT NULL DEFAULT 0 COMMENT '班级人数（按 users 表统计，自动同步）',
   `sort_order`     int           NOT NULL DEFAULT 0 COMMENT '显示排序',
   `created_at`     varchar(64)   NOT NULL DEFAULT '' COMMENT '创建时间',
   `remark`         varchar(500)  NOT NULL DEFAULT '' COMMENT '备注',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='班级信息表';
+
+-- 6. 实验类型表
+CREATE TABLE IF NOT EXISTS `experiment_types` (
+  `id`          bigint        NOT NULL AUTO_INCREMENT COMMENT '实验类型ID',
+  `name`        varchar(128)  NOT NULL COMMENT '实验类型名称',
+  `sort_order`  int           NOT NULL DEFAULT 0 COMMENT '显示排序',
+  `created_at`  varchar(64)   NOT NULL DEFAULT '' COMMENT '创建时间',
+  `remark`      varchar(500)  NOT NULL DEFAULT '' COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_experiment_type_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='实验类型表';
+
+-- 7. 实验类型示例数据（与实验中心页的三个实验保持一致）
+INSERT IGNORE INTO `experiment_types` (`name`, `sort_order`, `created_at`, `remark`) VALUES
+  ('智能汽车视觉感知实验', 1, NOW(), 'CARLA 城市道路 · UFLD 车道线检测 · YOLO 目标检测 · 自动驾驶状态监控'),
+  ('仓储 AGV 实验', 2, NOW(), '仓储物流 AGV 场景，后续场景适配阶段开放'),
+  ('巡检机器人实验', 3, NOW(), '巡检机器人场景，机器人仿真适配完成后开放');

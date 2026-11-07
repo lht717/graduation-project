@@ -220,12 +220,13 @@ export const useExperimentStore = defineStore("experiment", () => {
   }
 
   /* ---------------- 实验记录保存 ---------------- */
-  async function saveExperimentRecord(name = "") {
+  async function saveExperimentRecord(name = "", experimentType = "") {
     recordSaving.value = true;
     recordStatus.value = "正在保存实验记录…";
     try {
       const payload = {
         name: String(name || "").trim(),
+        experiment_type: String(experimentType || "").trim(),
         duration_seconds: currentDurationSeconds(),
         speed: Number(telemetry.value.speed) || 0,
         acceleration: Number(telemetry.value.acceleration) || 0,
@@ -233,6 +234,7 @@ export const useExperimentStore = defineStore("experiment", () => {
         yaw: Number(telemetry.value.yaw) || 0,
         front_fps: Number(fps.value) || 0
       };
+      if (!payload.experiment_type) throw new Error("无法识别当前实验类型");
       const result = await post("/api/experiments", payload);
       recordStatus.value = `已写入数据库：${result.experiment?.name || payload.name}`;
       log(`实验记录已保存（id=${result.experiment?.id ?? "?"}）`, "ok");

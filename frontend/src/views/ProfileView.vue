@@ -1,12 +1,18 @@
 <script setup>
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import AppLink from "@/components/AppLink.vue";
-import { post } from "@/api/client.js";
+import { get, post } from "@/api/client.js";
 import { useAuthStore } from "@/stores/auth.js";
 
 defineOptions({ name: "ProfileView" });
 
 const auth = useAuthStore();
+const recentExperiments = ref([]);
+const experimentTypes = ref([]);
+const experimentCount = ref(0);
+const totalDurationSeconds = ref(0);
+const experimentsLoading = ref(false);
+const experimentsError = ref("");
 
 const avatarPreviewOpen = ref(false);
 const avatarPreviewDialog = ref(null);
@@ -55,6 +61,49 @@ const passwordStatusClass = computed(() =>
 const avatarStatusClass = computed(() =>
   avatarStatusState.value ? `status ${avatarStatusState.value}` : "status"
 );
+
+const experimentTypesSummary = computed(() => experimentTypes.value.join("、") || "暂无");
+const totalDurationText = computed(() => {
+  const total = Math.max(0, Number(totalDurationSeconds.value) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = Math.floor(total % 60);
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+});
+
+function formatExperimentDate(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleString("zh-CN") : "—";
+}
+
+function formatExperimentDuration(value) {
+  const seconds = Math.max(0, Number(value) || 0);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  if (hours) return `${hours}小时 ${minutes}分`;
+  if (minutes) return `${minutes}分 ${remainingSeconds}秒`;
+  return `${remainingSeconds}秒`;
+}
+
+async function loadMyExperiments() {
+  experimentsLoading.value = true;
+  experimentsError.value = "";
+  try {
+    const result = await get("/api/users/me/experiments");
+    if (!Array.isArray(result.experiments) || !Array.isArray(result.experiment_types)) {
+      throw new Error("个人实验数据格式不正确");
+    }
+    recentExperiments.value = result.experiments;
+    experimentTypes.value = result.experiment_types;
+    experimentCount.value = Number(result.experiment_count) || 0;
+    totalDurationSeconds.value = Number(result.total_duration_seconds) || 0;
+  } catch (error) {
+    experimentsError.value = `实验数据加载失败：${error.message}`;
+  } finally {
+    experimentsLoading.value = false;
+  }
+}
 
 async function openAvatarPreview() {
   avatarPreviewOpen.value = true;
@@ -209,7 +258,7 @@ async function removeAvatar() {
 }
 
 function refreshCompletedExperiments() {
-  window.location.reload();
+  void loadMyExperiments();
 }
 
 function setDisplayNameStatus(message, state = "") {
@@ -268,6 +317,8 @@ async function changePassword() {
     savingPassword.value = false;
   }
 }
+
+onMounted(loadMyExperiments);
 </script>
 
 <template>
@@ -278,27 +329,41 @@ async function changePassword() {
         <section class="profile-summary-card">
           <header class="profile-summary-heading">
             <h2>我的实验</h2>
-            <button class="profile-refresh" type="button" aria-label="刷新已完成实验" title="刷新" @click="refreshCompletedExperiments">
+            <button class="profile-refresh" type="button" aria-label="刷新已完成实验" title="刷新" :disabled="experimentsLoading" @click="refreshCompletedExperiments">
               <span aria-hidden="true">↻</span>
-              <span>刷新</span>
+              <span>{{ experimentsLoading ? "加载中…" : "刷新" }}</span>
             </button>
           </header>
-          <p class="profile-empty-experiments">还没有完成的实验，<AppLink route="dashboard">去实验中心看看吧</AppLink></p>
+          <p v-if="experimentsError" class="profile-experiment-error" role="alert">{{ experimentsError }}</p>
+          <p v-else-if="experimentsLoading && !recentExperiments.length" class="profile-empty-experiments">正在读取实验记录…</p>
+          <p v-else-if="!recentExperiments.length" class="profile-empty-experiments">还没有完成的实验，<AppLink route="dashboard">去实验中心看看吧</AppLink></p>
+          <ul v-else class="profile-experiment-list" aria-label="近期五次实验">
+            <li v-for="experiment in recentExperiments" :key="experiment.id">
+              <div class="profile-experiment-main">
+                <strong>{{ experiment.name || experiment.experiment_type || "实验记录" }}</strong>
+                <span>{{ experiment.experiment_type || "未设置类型" }}</span>
+              </div>
+              <div class="profile-experiment-meta">
+                <span>{{ formatExperimentDuration(experiment.duration_seconds) }}</span>
+                <time>{{ formatExperimentDate(experiment.created_at) }}</time>
+              </div>
+            </li>
+          </ul>
         </section>
         <section class="profile-summary-card">
           <header class="profile-summary-heading"><h2>实验概览</h2></header>
           <div class="profile-stat-grid">
             <div class="profile-stat">
-              <span>在学课程</span>
-              <strong>0</strong>
+              <span>实验类型</span>
+              <strong :title="experimentTypesSummary">{{ experimentTypesSummary }}</strong>
             </div>
             <div class="profile-stat">
               <span>关联实验</span>
-              <strong>0</strong>
+              <strong>{{ experimentCount }}</strong>
             </div>
             <div class="profile-stat">
               <span>实验总时长</span>
-              <strong>00:00</strong>
+              <strong>{{ totalDurationText }}</strong>
             </div>
           </div>
         </section>

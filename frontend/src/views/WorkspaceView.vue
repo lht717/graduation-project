@@ -1,12 +1,20 @@
 <script setup>
-import { nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useExperimentStore } from "@/stores/experiment.js";
 
 defineOptions({ name: "WorkspaceView" });
 
 const exp = useExperimentStore();
 const router = useRouter();
+const route = useRoute();
+const DEFAULT_EXPERIMENT_TYPE = "智能汽车视觉感知实验";
+// 从实验中心卡片传入的类型，保存实验记录与顶栏标题都用它
+const experimentType = computed(() => {
+  const raw = Array.isArray(route.query.type) ? route.query.type[0] : route.query.type;
+  const value = String(raw || "").trim();
+  return value ? value.slice(0, 64) : DEFAULT_EXPERIMENT_TYPE;
+});
 
 const frontCanvas = ref(null);
 const rearCanvas = ref(null);
@@ -23,7 +31,7 @@ const rearHasFrame = ref(false);
 const recordName = ref("");
 
 async function onSaveRecord() {
-  await exp.saveExperimentRecord(recordName.value);
+  await exp.saveExperimentRecord(recordName.value, experimentType.value);
 }
 
 const pendingObjectUrls = new Set();
@@ -134,7 +142,7 @@ onUnmounted(() => {
     <header class="work-contextbar">
       <div class="work-context-title">
         <button class="back-btn" id="backDashboard" aria-label="返回我的实验" @click="router.push('/dashboard')">←</button>
-        <div class="work-title"><b>智能汽车视觉感知实验</b><span id="workModeLabel">{{ exp.workModeLabel }}</span></div>
+        <div class="work-title"><b>{{ experimentType }}</b><span id="workModeLabel">{{ exp.workModeLabel }}</span></div>
       </div>
     </header>
     <div class="work-body">

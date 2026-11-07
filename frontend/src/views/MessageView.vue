@@ -19,6 +19,10 @@ const replyStatusText = ref("");
 const replyStatusState = ref("");
 const sending = ref(false);
 const messageBody = ref(null);
+const availableRecipients = ref([]);
+const composePickerOpen = ref(false);
+const composeRecipient = ref("");
+const composeError = ref("");
 
 function formatDate(value) {
   if (!value) return "时间未知";
@@ -77,7 +81,7 @@ function threadPreview(thread) {
     const last = thread.messages[thread.messages.length - 1];
     return last.content || last.body || "（无消息内容）";
   }
-  return isAdmin.value ? `向 ${thread.label} 发起对话` : "点击此处给管理员发送私信";
+  return thread.draft ? "新对话 · 发送第一条消息后显示" : "暂无消息";
 }
 
 const messageTitle = computed(() => {
@@ -99,13 +103,18 @@ const messageDate = computed(() => {
 });
 
 const bodyPlaceholder = computed(() => {
+  if (selectedThread.value?.draft) {
+    return `这是与 ${selectedThread.value.label} 的新对话，输入内容并点击「发送」即可创建。`;
+  }
   if (selectedThread.value) {
     return isAdmin.value
       ? `还没有消息。你可以在此向 ${selectedThread.value.label} 发送私信。`
       : "暂无消息。你可以在下方给管理员发送私信。";
   }
   if (loaded.value && !threads.value.length) {
-    return isAdmin.value ? "还没有用户联系你，可等待用户发起对话。" : "当前没有私信。";
+    return isAdmin.value
+      ? "还没有私信对话，点击左侧「新建私信」选择学生发起对话。"
+      : "还没有私信对话，点击左侧「新建私信」给管理员发消息。";
   }
   return "从左侧选择对话，查看消息内容。";
 });
@@ -131,7 +140,51 @@ function setReplyStatus(message, state = "") {
 
 function selectThread(thread) {
   selectedThread.value = thread;
+  composePickerOpen.value = false;
+  composeError.value = "";
   setReplyStatus("");
+}
+
+/** 只保留真实会话；发起第一条私信时临时创建一个草稿会话 */
+function openDraft(key, label) {
+  const existing = threads.value.find((thread) => thread.key === key && !thread.draft);
+  if (existing) {
+    selectThread(existing);
+    return;
+  }
+  const draft = { key, label, messages: [], draft: true };
+  threads.value = [draft, ...threads.value.filter((thread) => !thread.draft)];
+  selectThread(draft);
+}
+
+function startCompose() {
+  composeError.value = "";
+  if (!isAdmin.value) {
+    openDraft("admin", "管理员");
+    return;
+  }
+  composePickerOpen.value = !composePickerOpen.value;
+}
+
+function cancelCompose() {
+  composePickerOpen.value = false;
+  composeError.value = "";
+}
+
+function confirmCompose() {
+  const username = composeRecipient.value;
+  if (!username) {
+    composeError.value = "请先选择要联系的学生。";
+    return;
+  }
+  const recipient = availableRecipients.value.find((item) => item.username === username);
+  if (!recipient) {
+    composeError.value = "收件人不存在，请刷新后重试。";
+    return;
+  }
+  composeError.value = "";
+  composeRecipient.value = "";
+  openDraft(recipient.username, recipient.display_name || recipient.username);
 }
 
 async function loadMessages(preferredKey = selectedThread.value?.key) {
@@ -141,26 +194,18 @@ async function loadMessages(preferredKey = selectedThread.value?.key) {
   try {
     const result = await get("/api/messages");
     if (!Array.isArray(result.messages)) throw new Error("私信列表格式不正确");
+    availableRecipients.value = Array.isArray(result.available_recipients)
+      ? result.available_recipients
+      : [];
+    // 刷新时保留尚未发出的草稿，避免已输入的内容被清掉
+    const currentDraft = selectedThread.value?.draft ? selectedThread.value : null;
+    // 只按真实消息分组，不再预置空对话
     const grouped = new Map();
     result.messages.forEach((message) => {
       const { key, label } = counterpartInfo(message);
       if (!grouped.has(key)) grouped.set(key, { key, label, messages: [] });
       grouped.get(key).messages.push(message);
     });
-    if (!isAdmin.value && !grouped.has("admin")) {
-      grouped.set("admin", { key: "admin", label: "管理员", messages: [] });
-    }
-    if (isAdmin.value && Array.isArray(result.available_recipients)) {
-      result.available_recipients.forEach((recipient) => {
-        if (!grouped.has(recipient.username)) {
-          grouped.set(recipient.username, {
-            key: recipient.username,
-            label: recipient.display_name || recipient.username,
-            messages: []
-          });
-        }
-      });
-    }
     const list = [...grouped.values()];
     list.forEach((thread) =>
       thread.messages.sort(
@@ -172,12 +217,18 @@ async function loadMessages(preferredKey = selectedThread.value?.key) {
       const bDate = b.messages.at(-1)?.created_at || b.messages.at(-1)?.timestamp || "";
       return new Date(bDate) - new Date(aDate);
     });
+    if (currentDraft && !list.some((thread) => thread.key === currentDraft.key)) {
+      list.unshift(currentDraft);
+    }
     threads.value = list;
     loaded.value = true;
     const activeThread = list.find((thread) => thread.key === preferredKey) || list[0];
     if (activeThread) selectThread(activeThread);
     else selectedThread.value = null;
-    statusText.value = `私信加载成功，共 ${list.length} 个对话。`;
+    const realCount = list.filter((thread) => !thread.draft).length;
+    statusText.value = realCount
+      ? `私信加载成功，共 ${realCount} 个对话。`
+      : "暂无私信对话，可点击「新建私信」发起对话。";
     statusState.value = "success";
     auth.markMessagesRead(result.messages);
   } catch (error) {
@@ -210,8 +261,9 @@ async function sendReply() {
       content
     });
     replyContent.value = "";
-    setReplyStatus("消息发送成功。", "success");
+    // loadMessages 会重建会话（草稿变为真实对话）并重置提示，成功提示放在其后
     await loadMessages(threadKey);
+    setReplyStatus("消息发送成功。", "success");
   } catch (error) {
     setReplyStatus(`消息发送失败：${error.message}`, "error");
   } finally {
@@ -232,11 +284,33 @@ onMounted(() => {
 <template>
   <section id="messageView">
     <main class="container view-container">
-      <header class="page-head"><p class="eyebrow">MESSAGES</p><h1>私信</h1><p>{{ isAdmin ? "管理员可向任意普通用户收发私信。" : "普通用户仅可与系统管理员对话，用户之间不可互相私信。" }}</p></header>
+      <header class="page-head"><p class="eyebrow">MESSAGES</p><h1>私信</h1><p>{{ isAdmin ? "仅显示已有消息往来的对话；联系新学生请点击「新建私信」。" : "仅显示已有消息往来的对话；你仅可与系统管理员私信。" }}</p></header>
       <p :class="statusClass" id="messagesStatus" role="status" aria-live="polite">{{ statusText }}</p>
       <section class="message-layout">
         <aside class="account-card">
-          <div class="message-list-head"><h2>对话列表</h2><button class="btn btn-outline" id="refreshMessages" @click="loadMessages()">刷新</button></div>
+          <div class="message-list-head">
+            <h2>对话列表</h2>
+            <div class="message-list-tools">
+              <button class="btn btn-primary" type="button" @click="startCompose">＋ 新建私信</button>
+              <button class="btn btn-outline" id="refreshMessages" type="button" @click="loadMessages()">刷新</button>
+            </div>
+          </div>
+          <div v-if="composePickerOpen" class="message-compose-picker">
+            <label for="composeRecipient">选择要联系的学生
+              <select id="composeRecipient" v-model="composeRecipient">
+                <option value="" disabled>请选择学生</option>
+                <option v-for="recipient in availableRecipients" :key="recipient.username" :value="recipient.username">
+                  {{ recipient.display_name || recipient.username }}（{{ recipient.username }}）
+                </option>
+              </select>
+            </label>
+            <p v-if="!availableRecipients.length" class="message-compose-error">暂无可联系的普通用户。</p>
+            <p v-if="composeError" class="message-compose-error">{{ composeError }}</p>
+            <div class="message-compose-actions">
+              <button class="btn btn-outline" type="button" @click="cancelCompose">取消</button>
+              <button class="btn btn-primary" type="button" :disabled="!availableRecipients.length" @click="confirmCompose">开始对话</button>
+            </div>
+          </div>
           <div id="messageList" class="message-list">
             <template v-if="listError">{{ listError }}</template>
             <template v-else>
@@ -244,11 +318,14 @@ onMounted(() => {
                 v-for="thread in threads"
                 :key="thread.key"
                 type="button"
-                class="message-list-item"
+                :class="['message-list-item', { 'message-list-draft': thread.draft }]"
                 :data-thread-key="thread.key"
                 :aria-pressed="selectedThread && selectedThread.key === thread.key ? 'true' : 'false'"
                 @click="selectThread(thread)"
               ><strong>{{ thread.label }}</strong><span>{{ threadPreview(thread) }}</span></button>
+              <p v-if="loaded && !threads.length" class="message-list-empty">
+                暂无对话记录，点击上方「新建私信」{{ isAdmin ? "选择学生" : "联系管理员" }}发起对话。
+              </p>
             </template>
           </div>
           <p v-if="!isAdmin" class="small-note" style="margin-top:10px">您仅能联系系统管理员。</p>
