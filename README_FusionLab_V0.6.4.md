@@ -8,7 +8,7 @@
 
 CARLA（B机） → 前视/第三人称摄像头 → UFLD + YOLO（B机 ONNX Runtime） → FastAPI WebSocket → FusionLab 浏览器工作台。
 
-“虚实结合”模式仍为界面与流程预留，真实 Jetson / Edge Agent 链路后续接入。
+“虚实结合”模式可通过独立 WebSocket 接入边缘主板；CARLA 仿真链路仍由原有 `/ws` 提供。
 
 ## V0.6.4 新增：模型上传、模型库与动态加载
 
@@ -49,6 +49,65 @@ CARLA（B机） → 前视/第三人称摄像头 → UFLD + YOLO（B机 ONNX Run
 
 本版上传使用原始二进制 Body，不依赖 `python-multipart`。
 
+## 虚实结合：边缘主板 WebSocket
+
+工作台切换至“虚实结合”后会自动连接 `/ws/edge/panel`，与 CARLA `/ws` 相互独立、可同时工作。
+
+- 页面控制端：`ws://<IP>:8080/ws/edge/panel?token=<登录 token>`（登录后自动订阅）
+- 边缘主板：`ws://<IP>:8080/ws/edge?device_id=jetson-nano&token=<设备密钥>`；可选 `name`、`vendor`、`model`、`device_no` 用于设备卡片展示
+- 页面控制按钮发送 `{"type":"command","command":"start"|"stop"|"switch_model","device_id":"jetson-nano","params":{}}`，后端只转发给选中的在线主板，并同步其空闲/使用中状态
+- 主板上报检测 JSON 后，页面展示目标类别、置信度、边界框、模型名与上报帧率，并可展开查看原始 JSON
+
+边缘主板收到控制消息后，应按设备协议启动或停止检测；检测结果以 JSON 文本帧持续上报。无设备连接时，页面控制按钮会保持禁用。
+
+## 边缘主板接入（已并入 main.py，单端口 8080）
+
+`edge_ws_server.py` 不再是独立进程，它的连接池、检测归一化与指令转发逻辑已通过 `attach()` 挂到 `main.py` 的同一个 FastAPI 实例上，页面与设备共用 8080 端口：
+
+| 入口 | 地址 | 说明 |
+|---|---|---|
+| 边缘主板 | `ws://<IP>:8080/ws/edge?device_id=jetson-nano&token=<设备密钥>` | 必须带设备密钥，默认 `fusionlab-edge-token`（可用环境变量 `EDGE_TOKEN` 覆盖） |
+| 页面工作台 | `ws://<IP>:8080/ws/edge/panel?token=<登录 token>` | 复用平台登录会话，无需另配密钥 |
+| REST | `GET /api/edge/devices`、`GET /api/edge/health`、`POST /api/edge/command` | 调试与脚本调用 |
+
+启动只有一条命令（默认端口 8080）：
+
+```bash
+python -m uvicorn main:app --host 0.0.0.0 --port 8080
+```
+
+主板客户端（`edge_device_client.py`）连接平台：
+
+```bash
+# 实物：摄像头 0 + YOLO
+python edge_device_client.py --server ws://192.168.1.20:8080/ws/edge \
+    --device-id jetson-nano --token fusionlab-edge-token --camera 0 --show
+
+# 联调：无摄像头/无权重时先用合成画面通链
+python edge_device_client.py --server ws://127.0.0.1:8080/ws/edge --mock
+```
+
+单独运行 `edge_ws_server.py`（8081）仍然可用，适合不启动平台、只做设备接入测试的场景。
+
+协议约定：
+
+- 设备 → 服务端：`{"type":"detection","count":2,"detections":[{"class_id":2,"class_name":"car","confidence":0.95,"bbox":[10,20,120,180]}],"frame":{"width":640,"height":480},"model":"yolov8n.pt","infer_ms":12.3,"seq":17}`，其中 `frame` 供前端按原始分辨率缩放框坐标；
+- 缩略图（可选）：设备可在检测帧里附 `thumb` 字段，内容为 `data:image/jpeg;base64,...`（客户端默认 320px 宽 / JPEG 质量 65，`--thumb-width 0` 关闭）。服务端校验前缀与大小后原样转发，并会从 `raw` 原始报文与 MySQL 落库中剔除该字段，避免流量与存储翻倍；**虚实结合模式下，主板上传的画面会直接铺满左侧「AI 感知识别」画布，检测框由前端按 `frame` 尺寸 1:1 叠加**（虚拟仿真模式该画布仍显示 CARLA 前视感知结果，两者不会互相覆盖）；
+- 服务端 → 设备：`{"type":"command","command":"start"|"stop"|"switch_model","params":{"model":"yolov8s.pt"},"request_id":"..."}`，握手后先下发 `welcome`；
+- 设备回执：`{"type":"command_ack","payload":{"ok":true,"command":"start","message":"检测已启动"}}`，服务端转成 `command_ack` 广播给前端；
+- 事件：`device_list`（握手快照）、`device_online`、`device_offline`（带 `reason`）都附全量设备列表。
+
+## 前端构建与部署
+
+前端源码在 `frontend/`（Vue 3 + Vite），`static/` 是 FastAPI 实际托管的构建产物：
+
+```bash
+cd frontend
+npm install        # 首次
+npm run build      # 产物在 frontend/dist
+cp -r dist/* ../static/    # 部署到 FastAPI 托管目录
+```
+
 ## 新增页面：个人中心与私信
 
 前端已按模块拆分到 `static/js/` 并采用 hash 路由，在原有实验流程之外新增两个页面：**个人中心（`#profile`）**，用于查看账号（学号）、角色与注册时间，并可修改自定义名称和登录密码；**私信（`#message`）**，用于查看收件箱列表与消息详情，支持手动刷新。
@@ -59,7 +118,7 @@ CARLA（B机） → 前视/第三人称摄像头 → UFLD + YOLO（B机 ONNX Run
 - CARLA 车辆蓝图查询、创建、开始/停止自动驾驶与销毁；
 - 前视摄像头与第三人称摄像头；
 - 速度、加速度、油门、航向实时状态；
-- 虚实结合模式边缘主板列表及连接交互（当前仍为前端模拟）；
+- 虚实结合模式通过独立 WebSocket 接入边缘主板并实时展示目标检测 JSON；
 - AI处理画面在左、CARLA摄像头与行驶信息在右；
 - 首页不再将产品限定为纯虚拟系统。
 

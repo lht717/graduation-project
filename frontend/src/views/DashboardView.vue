@@ -157,13 +157,6 @@ onMounted(() => {
         <div>
           <div class="eyebrow">MY EXPERIMENTS</div>
           <h1>实验中心</h1>
-          <p>选择一个实验进入工作台。实验工作台支持虚拟仿真与虚实结合两种运行模式。</p>
-        </div>
-        <div class="dashboard-head-tools">
-          <span class="exp-type-count">共 {{ cards.length }} 个实验类型</span>
-          <button class="exp-type-refresh" type="button" :disabled="loading" @click="loadTypes">
-            {{ loading ? "加载中…" : "↻ 刷新" }}
-          </button>
         </div>
       </div>
 

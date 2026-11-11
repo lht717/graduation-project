@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import queue
 import hashlib
 import base64
@@ -21,6 +22,55 @@ MODELS_DIR = BASE_DIR / "models"
 MODELS_DIR.mkdir(exist_ok=True)
 
 app = FastAPI()
+
+# ---------------------------------------------------------------------------
+# 边缘主板接入（V0.7：与 edge_ws_server.py 合并为同一进程）
+#   复用 edge_ws_server 的连接池、检测归一化与指令转发逻辑，挂在同一个 app 上：
+#     /ws/edge         边缘主板连接：?device_id=xxx&token=xxx（设备密钥鉴权）
+#     /ws/edge/panel   浏览器工作台连接：?token=<平台登录 token>（复用登录会话）
+#     /api/edge/*      设备列表 / 健康检查 / HTTP 下发指令
+#   旧版 role=device|dashboard 的简易 /ws/edge 已移除，避免两套连接池并存互相干扰。
+# ---------------------------------------------------------------------------
+
+import edge_ws_server as edge_service  # noqa: E402  (就近导入，便于看出与平台的关系)
+
+EDGE_DEVICE_TOKEN = os.environ.get("EDGE_TOKEN", "fusionlab-edge-token")
+
+
+def _edge_dashboard_auth(token: str) -> bool:
+    """控制端鉴权：直接复用平台登录会话，浏览器不必再单独维护一套边缘密钥。"""
+    username = auth_sessions.get(token or "")
+    if not username:
+        return False
+    return any(user["username"] == username and user.get("is_active", True) for user in users)
+
+
+edge_service.configure(
+    token=EDGE_DEVICE_TOKEN,
+    heartbeat_timeout=60.0,   # 60 秒没消息判为掉线（与客户端 ping_interval=20 匹配）
+    kick_duplicate=True,      # 同一 device_id 重连时踢掉旧连接，避免两条会话互相抢占
+    dashboard_auth=_edge_dashboard_auth,
+)
+
+# 设备端沿用 /ws/edge（客户端默认路径不用改），控制端放在 /ws/edge/panel
+edge_service.attach(
+    app,
+    device_path="/ws/edge",
+    panel_path="/ws/edge/panel",
+    api_prefix="/api/edge",
+)
+
+
+@app.on_event("startup")
+async def _start_edge_service() -> None:
+    """平台启动时拉起边缘服务的后台任务（心跳看门狗 / 可选 MySQL 写入器）。"""
+    await edge_service.start_service()
+
+
+@app.on_event("shutdown")
+async def _stop_edge_service() -> None:
+    """平台关闭时停掉后台任务并断开所有边缘设备。"""
+    await edge_service.stop_service()
 
 
 app.add_middleware(

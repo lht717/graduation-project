@@ -94,7 +94,7 @@ export const useExperimentStore = defineStore("experiment", () => {
   const modeNote = computed(() =>
     isSimulation.value
       ? "通过 WebSocket 与 CARLA 后端建立真实仿真连接。"
-      : "边缘设备连接接口尚未接入；CARLA WebSocket 仍连接真实后端。"
+      : "边缘主板通过 WebSocket 接入平台（设备密钥鉴权），检测帧与画面经平台转发到本页。"
   );
   // 原版 HTML 里的初始文案是「实验运行日志」，首次点击模式切换后才变成对应的运行日志
   const consoleModeText = computed(() => {

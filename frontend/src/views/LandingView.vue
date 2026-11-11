@@ -69,7 +69,7 @@ function scrollToCapabilities() {
           <div><span>03</span><b>WebSocket</b><small>实时数据传输</small></div><i>→</i>
           <div><span>04</span><b>浏览器</b><small>结果可视化</small></div>
         </div>
-        <p>后续可在虚实结合模式下，将算法执行节点切换至真实边缘计算设备。</p>
+        <p>虚实结合模式可通过独立 WebSocket 接入边缘主板，实时查看目标检测结果并下发检测控制指令。</p>
       </section>
       <section class="landing-cta">
         <p>准备好开始你的下一次实验了吗？</p>
