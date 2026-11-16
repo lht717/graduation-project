@@ -36,8 +36,13 @@
 .stage-stats b small{font-size:9px;font-weight:600;color:#8a99aa}
 /* 并列布局下控制台撑满右侧整列，日志区可滚动 */
 .mainlab-split .console.console-centered{max-width:none;margin:0;height:100%;display:flex;flex-direction:column}
-.mainlab-split .console.console-centered .console-body{flex:1;height:auto;min-height:180px}
-@media(max-width:1100px){.mainlab.mainlab-split{grid-template-columns:minmax(0,1fr)}.mainlab-split .console.console-centered{height:auto}}
+/* 控制台外壳与左侧画面卡片同一套白底卡片样式，日志区做成内嵌深色块，风格统一 */
+.mainlab-split .console.console-centered{background:#fff;border:1px solid #e4eaf2;border-radius:16px;box-shadow:0 12px 30px rgba(20,45,80,.09);color:#3a4c62;padding:0}
+.mainlab-split .console.console-centered .console-head{background:#fff;border-bottom:1px solid #e8edf3;height:46px;padding-inline:14px}
+.mainlab-split .console.console-centered .console-head b{color:#1b2b3d;font-size:11px}
+.mainlab-split .console.console-centered .console-head span{color:#8998aa;font-size:9px}
+.mainlab-split .console.console-centered .console-body{flex:1;height:auto;min-height:180px;margin:10px;border-radius:10px;background:#0f1924;color:#cbd9e6;padding:10px 11px}
+@media(max-width:1100px){.mainlab.mainlab-split{grid-template-columns:minmax(0,1fr)}.mainlab-split .console.console-centered{height:320px}}
 @media(max-width:720px){.stage-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stage-stats>div:nth-child(3){border-left:0}}
 .compact-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .compact-metrics .metric{padding:9px 10px;min-width:0}
