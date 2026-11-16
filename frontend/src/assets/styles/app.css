@@ -18,12 +18,12 @@
    否则 cover 会把画面和检测框裁掉一部分 */
 .canvas-wrap canvas.edge-source{object-fit:contain}
 .side-visual-stack>.panel .canvas-wrap{aspect-ratio:4/3}
-/* 真实场景：只有一路边缘主板画面，占满主区宽度（16:9），
-   主板图按 contain 居中，底部再补一条运行指标，避免大片空白显得空 */
+/* 真实场景：左侧 AI 画面 + 右侧 Runtime Console 两框并列，
+   画面用 4:3 贴合主板摄像头，控制台高度跟随画面卡片，日志有足够空间 */
+.mainlab.mainlab-split{display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,25vw,380px);gap:10px;align-content:start;align-items:stretch}
 .visual-layout.stage{grid-template-columns:minmax(0,1fr)}
 .visual-layout.stage>.panel{width:100%;border-radius:16px;box-shadow:0 12px 30px rgba(20,45,80,.09)}
-/* 画布限高后宽度随之收缩，margin auto 让画面卡片在面板内水平居中，两侧留白对称 */
-.visual-layout.stage>.panel .canvas-wrap{aspect-ratio:16/9;max-height:min(50vh,480px);margin-inline:auto;width:100%}
+.visual-layout.stage>.panel .canvas-wrap{aspect-ratio:4/3}
 .stage-chip{display:inline-flex;align-items:center;gap:5px;margin-left:9px;padding:3px 7px;border-radius:999px;background:#f0f4f9;color:#8296ab;font-size:8px;font-weight:800;letter-spacing:.06em;vertical-align:1px}
 .stage-chip i{width:6px;height:6px;border-radius:50%;background:#aeb8c4}
 .stage-chip.live{background:#eafaf2;color:#158a60}
@@ -34,6 +34,10 @@
 .stage-stats span{display:block;font-size:8px;color:#8a99aa;letter-spacing:.03em}
 .stage-stats b{display:block;margin-top:3px;font-size:12px;color:#1b2b3d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stage-stats b small{font-size:9px;font-weight:600;color:#8a99aa}
+/* 并列布局下控制台撑满右侧整列，日志区可滚动 */
+.mainlab-split .console.console-centered{max-width:none;margin:0;height:100%;display:flex;flex-direction:column}
+.mainlab-split .console.console-centered .console-body{flex:1;height:auto;min-height:180px}
+@media(max-width:1100px){.mainlab.mainlab-split{grid-template-columns:minmax(0,1fr)}.mainlab-split .console.console-centered{height:auto}}
 @media(max-width:720px){.stage-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stage-stats>div:nth-child(3){border-left:0}}
 .compact-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .compact-metrics .metric{padding:9px 10px;min-width:0}
