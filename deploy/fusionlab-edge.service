@@ -1,0 +1,28 @@
+[Unit]
+Description=FusionLab Edge Device Client (Jetson Nano)
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ljj
+Group=ljj
+WorkingDirectory=/home/ljj/edge_client
+# 摄像头 + YOLO 检测上传；不要加 --mock / --no-camera
+ExecStart=/usr/bin/python3.8 /home/ljj/edge_client/edge_device_client.py \
+    --server ws://192.168.55.100:8080/ws/edge \
+    --device-id board-01 \
+    --name "Jetson Nano" \
+    --vendor NVIDIA \
+    --device-no Edge-01 \
+    --camera 0 \
+    --fps 5
+Restart=always
+RestartSec=5
+# 板子内存紧张，限制日志量
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fusionlab-edge
+
+[Install]
+WantedBy=multi-user.target
