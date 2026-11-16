@@ -18,6 +18,9 @@
    否则 cover 会把画面和检测框裁掉一部分 */
 .canvas-wrap canvas.edge-source{object-fit:contain}
 .side-visual-stack>.panel .canvas-wrap{aspect-ratio:4/3}
+/* 真实场景只有一路边缘主板画面：单列铺满，画幅上限避免在宽屏被拉得过高 */
+.visual-layout.single-column{grid-template-columns:minmax(0,1fr)}
+.visual-layout.single-column>.panel .canvas-wrap{aspect-ratio:16/9;max-height:min(62vh,620px)}
 .compact-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .compact-metrics .metric{padding:9px 10px;min-width:0}
 .compact-metrics .metric span{font-size:8px}
