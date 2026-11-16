@@ -31,19 +31,56 @@ const rearHasFrame = ref(false);
 
 const recordName = ref("");
 
-const edgeDeviceCatalog = [
-  { id: "jetson-nano", name: "Jetson Nano", vendor: "NVIDIA", memory: "4GB", deviceNo: "Edge-01" },
-  { id: "jetson-orin-nx", name: "Jetson Orin NX", vendor: "NVIDIA", memory: "16GB", deviceNo: "Edge-02" },
-  { id: "ascend-310b", name: "Ascend 310B", vendor: "Huawei Ascend", memory: "内存未标注", deviceNo: "Edge-03" },
-  { id: "rk3588", name: "RK3588", vendor: "ARM NPU", memory: "8GB", deviceNo: "Edge-04" }
-];
 let edgeSocket = null;
 let edgeReconnectTimer = null;
 let edgeFpsTimer = null;
 const edgeWsConnected = ref(false);
 const edgeWsConnecting = ref(false);
 const edgeDevices = ref([]);
-const selectedEdgeDeviceId = ref("jetson-nano");
+// 近期连接过的主板：设备一上线就记录到 localStorage，之后即使离线也保留条目，
+// 不再使用写死的假设备目录；列表 = 历史记录 + 实时在线状态合并
+const EDGE_RECENT_KEY = "edge_recent_devices";
+const recentEdgeDevices = ref(loadRecentEdgeDevices());
+
+function loadRecentEdgeDevices() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(EDGE_RECENT_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter((item) => item && item.id) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberEdgeDevices(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  const now = Date.now();
+  const map = new Map(recentEdgeDevices.value.map((device) => [device.id, device]));
+  for (const dev of list) {
+    const id = dev.device_id || dev.id;
+    if (!id) continue;
+    const prev = map.get(id) || {};
+    map.set(id, {
+      ...prev,
+      id,
+      name: dev.name || prev.name || id,
+      vendor: dev.vendor || prev.vendor || "",
+      memory: dev.model || prev.memory || "",
+      deviceNo: dev.device_no || prev.deviceNo || "",
+      lastSeen: now
+    });
+  }
+  // 最多保留 8 条，按最近连接时间倒序
+  recentEdgeDevices.value = [...map.values()]
+    .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))
+    .slice(0, 8);
+  try {
+    localStorage.setItem(EDGE_RECENT_KEY, JSON.stringify(recentEdgeDevices.value));
+  } catch {
+    /* localStorage 不可用时只保留在内存里 */
+  }
+}
+
+const selectedEdgeDeviceId = ref("");
 const edgeDetectionData = ref(null);
 // 边缘主板随检测结果回传的缩略图（data:image/jpeg;base64,...），用作画布底图
 const edgeThumb = ref("");
@@ -56,28 +93,35 @@ const edgeSeq = ref(0);
 const edgeFps = ref(0);
 const edgeFramesThisSecond = ref(0);
 const selectedEdgeDevice = computed(
-  () => edgeDeviceList.value.find((device) => device.id === selectedEdgeDeviceId.value) || edgeDeviceList.value[0]
+  () => edgeDeviceList.value.find((device) => device.id === selectedEdgeDeviceId.value) || edgeDeviceList.value[0] || null
 );
 const edgeDeviceList = computed(() => {
+  // 基础列表来自"近期连过的主板"（localStorage），默认离线
   const devices = new Map(
-    edgeDeviceCatalog.map((device) => [device.id, { ...device, status: "offline", frames: 0, online: 0 }])
+    recentEdgeDevices.value.map((device) => [
+      device.id,
+      {
+        ...device,
+        meta: [device.vendor, device.memory, device.deviceNo].filter(Boolean).join(" · "),
+        status: "offline",
+        frames: 0,
+        online: 0
+      }
+    ])
   );
   for (const online of edgeDevices.value) {
     // 服务端字段：device_id / name / vendor / model / device_no / status / detection_count / online_seconds
     const id = online.device_id || online.id;
-    const current = devices.get(id) || {
-      id,
-      name: online.name || id,
-      vendor: online.vendor || "未知厂商",
-      memory: online.model || "未标注",
-      deviceNo: online.device_no || id
-    };
+    const current = devices.get(id) || { id, name: online.name || id, vendor: "", memory: "", deviceNo: "", meta: "" };
     devices.set(id, {
       ...current,
       name: online.name || current.name,
       vendor: online.vendor || current.vendor,
       memory: online.model || current.memory,
       deviceNo: online.device_no || current.deviceNo,
+      meta: [online.vendor || current.vendor, online.model || current.memory, online.device_no || current.deviceNo]
+        .filter(Boolean)
+        .join(" · "),
       status: online.status || "idle",
       frames: Number(online.detection_count) || 0,
       online: Number(online.online_seconds) || 0,
@@ -229,6 +273,8 @@ function edgeStatusText(status) {
 
 function applyEdgeDevices(list) {
   edgeDevices.value = Array.isArray(list) ? list : [];
+  // 记录"近期连过的主板"（含刚上线的），供离线后继续展示
+  rememberEdgeDevices(edgeDevices.value);
   // 选中的设备离线时，自动切到第一台在线设备，避免指令发给不存在的连接
   const stillOnline = edgeDevices.value.some((device) => (device.device_id || device.id) === selectedEdgeDeviceId.value);
   if (!stillOnline && edgeDevices.value.length) {
@@ -615,7 +661,7 @@ onUnmounted(() => {
         </div><div class="small-note">从后端查看并切换 ONNX 模型。由于车道线与目标检测的预/后处理不同，请为两个算法槽位选择兼容模型。</div></div>
         <div class="block edge-device-block" id="edgeDeviceBlock" :class="{ hidden: exp.isSimulation }">
           <label>03 · 边缘主板（设备侧）</label>
-          <div class="edge-device-list" role="list" aria-label="边缘主板设备列表">
+          <div class="edge-device-list" role="list" aria-label="近期连接的边缘主板列表">
             <button
               v-for="device in edgeDeviceList"
               :key="device.id"
@@ -630,13 +676,14 @@ onUnmounted(() => {
               <span class="device-state" :class="{ online: device.status === 'idle', busy: device.status === 'busy', offline: device.status === 'offline' }">
                 <i></i>{{ edgeStatusText(device.status) }}
               </span>
-              <span class="edge-device-meta">{{ device.vendor }} · {{ device.memory }} · {{ device.deviceNo || device.id }}<template v-if="device.frames"> · 累计 {{ device.frames }} 帧</template></span>
+              <span class="edge-device-meta">{{ device.meta || device.id }}<template v-if="device.frames"> · 累计 {{ device.frames }} 帧</template></span>
             </button>
+            <div v-if="!edgeDeviceList.length" class="model-item"><b>暂无连接记录</b><span>主板运行客户端后自动出现在这里</span></div>
           </div>
           <div class="edge-connection-bar" :class="{ connected: edgeDeviceConnected && edgeWsConnected }">
             <span>
               <i></i>
-              {{ edgeWsConnecting ? "正在连接设备服务…" : edgeDeviceConnected && edgeWsConnected ? `${selectedEdgeDevice.name} 已连接` : `${selectedEdgeDevice.name} 未连接` }}
+              {{ edgeWsConnecting ? "正在连接设备服务…" : edgeDeviceConnected && edgeWsConnected ? `${selectedEdgeDevice.name} 已连接` : selectedEdgeDevice ? `${selectedEdgeDevice.name} 未连接` : "尚未连接主板" }}
             </span>
             <button id="connectEdgeBtn" class="btn btn-primary" :disabled="edgeWsConnecting" @click="reconnectEdge">
               {{ edgeWsConnecting ? "连接中…" : "重连" }}
