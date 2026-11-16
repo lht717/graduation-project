@@ -38,7 +38,12 @@ export const useExperimentStore = defineStore("experiment", () => {
   // 收到 vehicle_destroyed 时视图需要清空两路画面
   const frameResetTick = ref(0);
 
-  /* ---------------- 运行模式 ---------------- */
+  /* ---------------- 运行模式 ----------------
+   * simulation：纯 CARLA 虚拟仿真，两路画面都来自仿真
+   * hybrid    ：虚实结合，CARLA 车辆 + 边缘主板感知
+   * real      ：真实场景，只用边缘主板（真实摄像头），不依赖 CARLA
+   */
+  const SCENE_MODES = ["simulation", "hybrid", "real"];
   const mode = ref("simulation");
   const modeTouched = ref(false);
 
@@ -89,17 +94,38 @@ export const useExperimentStore = defineStore("experiment", () => {
   );
 
   const isSimulation = computed(() => mode.value === "simulation");
-  const workModeLabel = computed(() => (isSimulation.value ? "CARLA · 虚拟仿真" : "CARLA · 虚实结合"));
-  const runtimeMode = computed(() => (isSimulation.value ? "SIMULATION" : "HYBRID"));
-  const modeNote = computed(() =>
-    isSimulation.value
-      ? "通过 WebSocket 与 CARLA 后端建立真实仿真连接。"
-      : "边缘主板通过 WebSocket 接入平台（设备密钥鉴权），检测帧与画面经平台转发到本页。"
+  const isHybrid = computed(() => mode.value === "hybrid");
+  const isRealScene = computed(() => mode.value === "real");
+  // 是否接入边缘主板：虚实结合、真实场景都要
+  const usesEdge = computed(() => !isSimulation.value);
+  // 是否接入 CARLA：真实场景下完全不连仿真，避免"真实"名义下混入仿真画面
+  const usesCarla = computed(() => !isRealScene.value);
+  const modeLabel = computed(
+    () => ({ simulation: "虚拟仿真", hybrid: "虚实结合", real: "真实场景" })[mode.value] || "虚拟仿真"
+  );
+  const workModeLabel = computed(
+    () =>
+      ({
+        simulation: "CARLA · 虚拟仿真",
+        hybrid: "CARLA · 虚实结合",
+        real: "EDGE · 真实场景"
+      })[mode.value] || "CARLA · 虚拟仿真"
+  );
+  const runtimeMode = computed(
+    () => ({ simulation: "SIMULATION", hybrid: "HYBRID", real: "REAL" })[mode.value] || "SIMULATION"
+  );
+  const modeNote = computed(
+    () =>
+      ({
+        simulation: "通过 WebSocket 与 CARLA 后端建立真实仿真连接。",
+        hybrid: "边缘主板通过 WebSocket 接入平台（设备密钥鉴权），检测帧与画面经平台转发到本页。",
+        real: "仅接入边缘主板：画面与检测框全部来自真实摄像头，不加载 CARLA 仿真，车辆控制暂不可用。"
+      })[mode.value] || ""
   );
   // 原版 HTML 里的初始文案是「实验运行日志」，首次点击模式切换后才变成对应的运行日志
   const consoleModeText = computed(() => {
     if (!modeTouched.value) return "实验运行日志";
-    return isSimulation.value ? "虚拟仿真运行日志" : "虚实结合运行日志";
+    return `${modeLabel.value}运行日志`;
   });
 
   /* ---------------- 基础动作 ---------------- */
@@ -159,9 +185,10 @@ export const useExperimentStore = defineStore("experiment", () => {
   }
 
   function setMode(next) {
+    if (!SCENE_MODES.includes(next) || next === mode.value) return;
     mode.value = next;
     modeTouched.value = true;
-    log(`已切换至${next === "simulation" ? "虚拟仿真" : "虚实结合"}模式`);
+    log(`已切换至${modeLabel.value}模式`);
   }
 
   async function uploadModel(file, name) {
@@ -454,7 +481,7 @@ export const useExperimentStore = defineStore("experiment", () => {
     connectBackend();
   }
 
-  /** 卸载时断开（原版页面关闭才发生） */
+  /** 卸载或切到「真实场景」时断开 CARLA：顺手把车辆状态复位，避免残留的“行驶中” */
   function disconnect() {
     window.clearInterval(fpsTimer);
     fpsTimer = null;
@@ -470,6 +497,17 @@ export const useExperimentStore = defineStore("experiment", () => {
       }
       socket = null;
     }
+    stopTimer();
+    vehicleCreated.value = false;
+    driving.value = false;
+    creationPending.value = false;
+    startPending.value = false;
+    stopPending.value = false;
+    destroyPending.value = false;
+    hasBlueprints.value = false;
+    blueprints.value = [];
+    vehicleSelection.value = "";
+    vehicleHint.value = "后端未连接";
     setConnection(false, "后端未连接");
   }
 
@@ -510,6 +548,11 @@ export const useExperimentStore = defineStore("experiment", () => {
     canStop,
     canDestroy,
     isSimulation,
+    isHybrid,
+    isRealScene,
+    usesEdge,
+    usesCarla,
+    modeLabel,
     workModeLabel,
     runtimeMode,
     modeNote,
@@ -527,6 +570,7 @@ export const useExperimentStore = defineStore("experiment", () => {
     stopDriving,
     destroyVehicle,
     activate,
+    connectBackend,
     disconnect,
     formatBytes
   };
