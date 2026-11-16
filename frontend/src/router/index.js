@@ -36,11 +36,16 @@ export function createRouter() {
     routes
   });
 
+  // 被登录守卫拦截的导航：跳回首页后要保持登录弹窗打开（否则 afterEach 会立刻关掉）
+  let promptLoginAfterRedirect = false;
+
   // 复刻原版 showView() 的两道守卫：先登录，再管理员
   router.beforeEach((to) => {
     const auth = useAuthStore();
     if (to.meta.requiresAuth && !auth.authenticated) {
-      auth.openLogin("请先登录后访问该页面。");
+      // 记住用户原本想访问的页面，登录成功后直接跳过去
+      auth.loginRedirect = to.fullPath;
+      promptLoginAfterRedirect = true;
       return { path: "/home", replace: true };
     }
     if (to.meta.requiresAdmin && auth.user.role !== "admin") {
@@ -49,9 +54,16 @@ export function createRouter() {
     return true;
   });
 
-  // 原版 showView() 在视图切换成功后调用 closeLogin()
+  // 原版 showView() 在正常的视图切换后调用 closeLogin()
   router.afterEach(() => {
-    useAuthStore().closeLogin();
+    const auth = useAuthStore();
+    if (promptLoginAfterRedirect) {
+      // 未登录点「实验中心 / 个人中心」等受保护入口：直接展示登录界面并保持打开
+      promptLoginAfterRedirect = false;
+      auth.openLogin("请先登录后访问该页面。");
+      return;
+    }
+    auth.closeLogin();
   });
 
   return router;

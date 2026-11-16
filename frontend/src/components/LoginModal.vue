@@ -18,7 +18,11 @@ function goHome() {
 
 async function submit() {
   const ok = await auth.login(username.value, password.value, selectedRole.value);
-  if (ok) router.push("/dashboard");
+  if (!ok) return;
+  // 未登录时被路由守卫拦下的目标页面（如实验中心/个人中心），登录后直接跳过去
+  const target = auth.loginRedirect || "/dashboard";
+  auth.loginRedirect = "";
+  router.push(target);
 }
 </script>
 

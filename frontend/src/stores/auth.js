@@ -32,6 +32,8 @@ export const useAuthStore = defineStore("auth", () => {
   const loginStatus = ref("");
   const loginStatusState = ref("");
   const loginPending = ref(false);
+  // 未登录时被拦下的目标页面：登录成功后直接跳过去（由路由守卫写入）
+  const loginRedirect = ref("");
 
   // 未读红点：hasUnread 是真实状态；unreadTick 对应原版 updateMessageIndicator() 的每一次调用
   const hasUnread = ref(false);
@@ -233,6 +235,7 @@ export const useAuthStore = defineStore("auth", () => {
     loginStatus,
     loginStatusState,
     loginPending,
+    loginRedirect,
     hasUnread,
     unreadTick,
     displayName,
