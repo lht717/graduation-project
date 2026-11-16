@@ -298,6 +298,21 @@ function clearEdgeCanvas() {
   }
 }
 
+// 离开真实场景：把画布复位成 CARLA 的 800×600 并清空，同时丢掉主板帧缓存与
+// 正在解码的旧缩略图，避免真实场景的画面残留在虚实结合的「AI 感知识别」里
+function resetFrontCanvas() {
+  lastFrontFrame = null;
+  edgeDetectionData.value = null;
+  edgeThumb.value = "";
+  edgeFrameToken += 1;
+  frontHasFrame.value = false;
+  const canvas = frontCanvas.value;
+  if (!canvas) return;
+  canvas.width = 800;
+  canvas.height = 600;
+  canvas.getContext("2d")?.clearRect(0, 0, 800, 600);
+}
+
 function edgeStatusText(status) {
   if (status === "idle") return "在线·空闲";
   if (status === "busy") return "在线·使用中";
@@ -535,8 +550,9 @@ watch(
   (edgeOn) => {
     if (edgeOn) {
       connectEdge();
-      // 切到主板供图的场景时画布是刚挂载的，补一次绘制，避免等到下一帧才有内容
-      nextTick(renderEdgeCanvas);
+      // 切到边缘模式时画布刚挂载，补一次绘制：真实场景补主板画面，
+      // 虚实结合没有主板底图可画，交给 CARLA 帧（避免把主板缩略图当 CARLA 画面）
+      nextTick(exp.isRealScene ? renderEdgeCanvas : drawHybridFront);
     } else {
       window.clearTimeout(edgeReconnectTimer);
       edgeReconnectTimer = null;
@@ -555,6 +571,9 @@ watch(
       clearFrames();
       nextTick(clearEdgeCanvas);
     } else {
+      // 从真实场景切回来时，画布内部分辨率还是主板那一路的、内容也是主板缩略图，
+      // 必须复位成 CARLA 的 800×600 并清空，否则会残留真实场景的画面
+      resetFrontCanvas();
       exp.activate();
     }
   }
