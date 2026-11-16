@@ -60,7 +60,7 @@ async function handleLogout(event) {
       :data-user-avatar="isDashboard ? null : ''"
       aria-hidden="true"
     >
-      <img v-if="auth.avatarUrl" class="profile-avatar-image" :src="auth.avatarUrl" alt="">
+      <img v-if="auth.avatarSrc" class="profile-avatar-image" :src="auth.avatarSrc" alt="" @error="auth.markAvatarFailed()">
       <span v-else>{{ auth.avatarText }}</span>
     </div>
     <span class="profile-tooltip" role="tooltip"><b

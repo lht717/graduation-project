@@ -14,9 +14,11 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true, // 允许局域网内其他电脑访问开发页面
-    // 开发模式下 /api 与 /ws 转发到本机后端（生产模式由 FastAPI 直接托管，无需代理）
+    // 开发模式下 /api、/static 与 /ws 转发到本机后端（生产模式由 FastAPI 直接托管，无需代理）
+    // /static 必须代理：头像等资源都由后端提供，否则开发页面上头像会 404
     proxy: {
       "/api": { target: "http://127.0.0.1:8080", changeOrigin: true },
+      "/static": { target: "http://127.0.0.1:8080", changeOrigin: true },
       "/ws": { target: "ws://127.0.0.1:8080", ws: true }
     }
   }

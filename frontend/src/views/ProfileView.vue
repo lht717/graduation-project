@@ -380,12 +380,12 @@ onMounted(loadMyExperiments);
               aria-haspopup="dialog"
               @click="openAvatarPreview"
             >
-              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" alt="">
+              <img v-if="auth.avatarSrc" :src="auth.avatarSrc" alt="" @error="auth.markAvatarFailed()">
               <span v-else>{{ auth.avatarText }}</span>
             </button>
             <div class="profile-avatar-details">
               <b>个人头像</b>
-              <span>支持常见图片格式，文件大小不超过 2 MB；头像仅保存在当前浏览器。</span>
+              <span>支持常见图片格式，文件大小不超过 2 MB；头像会保存到服务器，换设备登录同样显示。</span>
               <div class="profile-avatar-actions">
                 <input
                   id="profileAvatarInput"
@@ -441,7 +441,7 @@ onMounted(loadMyExperiments);
         @keydown.esc="closeAvatarPreview"
       >
         <button class="avatar-preview-close" type="button" aria-label="关闭头像预览" @click="closeAvatarPreview">×</button>
-        <img v-if="auth.avatarUrl" :src="auth.avatarUrl" alt="放大后的个人头像">
+        <img v-if="auth.avatarSrc" :src="auth.avatarSrc" alt="放大后的个人头像" @error="auth.markAvatarFailed()">
         <span v-else>{{ auth.avatarText }}</span>
       </section>
     </div>

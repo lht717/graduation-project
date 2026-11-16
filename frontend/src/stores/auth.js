@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
 import { get, post } from "@/api/client.js";
 import { config } from "@/config.js";
@@ -23,10 +23,26 @@ function normalizeAvatarUrl(url) {
   return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+// 头像文件名是固定的（/static/avatars/<username>.png），换头像后地址不变，
+// 浏览器会继续用旧缓存，看起来像"上传没生效"。这里加一个版本参数强制刷新。
+function withAvatarVersion(url) {
+  if (!url || url.startsWith("data:")) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
+}
+
 export const useAuthStore = defineStore("auth", () => {
   const user = ref({ ...DEFAULT_USER });
   const authenticated = ref(false);
   const avatarUrl = ref("");
+  // 头像图片本身加载失败（文件被删、地址不可达）时回退成首字母，避免页面上出现破图
+  const avatarFailed = ref(false);
+  const avatarSrc = computed(() => (avatarFailed.value ? "" : avatarUrl.value));
+  function markAvatarFailed() {
+    avatarFailed.value = true;
+  }
+  watch(avatarUrl, () => {
+    avatarFailed.value = false;
+  });
 
   const loginModalOpen = ref(false);
   const loginStatus = ref("");
@@ -60,7 +76,7 @@ export const useAuthStore = defineStore("auth", () => {
   function loadUserAvatar(username) {
     const backendAvatar = user.value?.avatar || "";
     avatarUrl.value = backendAvatar
-      ? normalizeAvatarUrl(backendAvatar)
+      ? withAvatarVersion(normalizeAvatarUrl(backendAvatar))
       : username
         ? localStorage.getItem(avatarStorageKey(username)) || ""
         : "";
@@ -87,7 +103,7 @@ export const useAuthStore = defineStore("auth", () => {
     const result = await post("/api/users/me/avatar", { avatar: dataUrl });
     if (result.user) user.value = result.user;
     const nextAvatar = result.user?.avatar || "";
-    avatarUrl.value = nextAvatar ? normalizeAvatarUrl(nextAvatar) : dataUrl;
+    avatarUrl.value = nextAvatar ? withAvatarVersion(normalizeAvatarUrl(nextAvatar)) : dataUrl;
     localStorage.removeItem(avatarStorageKey(user.value.username));
   }
 
@@ -99,7 +115,7 @@ export const useAuthStore = defineStore("auth", () => {
     }
     const result = await post("/api/users/me/avatar", { avatar: "/static/avatar_default.png" });
     if (result.user) user.value = result.user;
-    avatarUrl.value = normalizeAvatarUrl(result.user?.avatar || "/static/avatar_default.png");
+    avatarUrl.value = withAvatarVersion(normalizeAvatarUrl(result.user?.avatar || "/static/avatar_default.png"));
   }
 
   function openLogin(message = "") {
@@ -242,6 +258,8 @@ export const useAuthStore = defineStore("auth", () => {
     accountId,
     roleName,
     avatarText,
+    avatarSrc,
+    markAvatarFailed,
     isAdmin,
     loginStatusClass,
     openLogin,
