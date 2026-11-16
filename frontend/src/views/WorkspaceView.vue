@@ -28,6 +28,8 @@ const loadModelsDisabled = ref(false);
 
 const frontHasFrame = ref(false);
 const rearHasFrame = ref(false);
+// 虚实结合下保留最近一帧 CARLA 前视画面：主板每来一帧检测结果都要重画底图再叠框
+let lastFrontFrame = null;
 
 const recordName = ref("");
 
@@ -186,6 +188,12 @@ function drawEdgeBoxes(ctx, width, height) {
   const lineWidth = Math.max(2, Math.round(width / 320));
   ctx.font = `500 ${fontSize}px system-ui, -apple-system, sans-serif`;
   ctx.textBaseline = "alphabetic";
+  // 虚实结合下画布是 CARLA 的 800×600，而框是主板在自身摄像头分辨率下算的，
+  // 按两边尺寸比换算一次，框才能落在画面对应的位置上
+  const sourceWidth = Number(edgeFrameSize.value.width) || width;
+  const sourceHeight = Number(edgeFrameSize.value.height) || height;
+  const scaleX = width / sourceWidth;
+  const scaleY = height / sourceHeight;
 
   edgeDetections.value.forEach((detection, index) => {
     const box = edgeRawBox(detection);
@@ -195,6 +203,8 @@ function drawEdgeBoxes(ctx, width, height) {
     // 少数设备给的是 0~1 归一化坐标，这里自动识别并换算成像素
     if (x1 <= 1 && y1 <= 1 && x2 <= 1 && y2 <= 1) {
       x1 *= width; x2 *= width; y1 *= height; y2 *= height;
+    } else {
+      x1 *= scaleX; x2 *= scaleX; y1 *= scaleY; y2 *= scaleY;
     }
     // 统一成左上/右下的顺序，避免设备端给成 (x2,y2,x1,y1) 时画出空框
     const left = Math.min(x1, x2), top = Math.min(y1, y2);
@@ -218,8 +228,8 @@ function drawEdgeBoxes(ctx, width, height) {
   });
 }
 
-// 边缘画面直接画进左侧「AI 感知识别」画布：虚实结合模式下它只有这一个数据源，
-// 不再单独占一块面板，老师看到的"AI 识别画面"就是主板上传的画面 + 主板算出的框。
+// 真实场景：边缘画面直接画进左侧「AI 感知识别」画布，
+// 底图是主板上传的缩略图，框由主板算好；虚实结合不再走这里（底图用 CARLA 画面）
 function renderEdgeCanvas() {
   const canvas = frontCanvas.value;
   if (!canvas) return;
@@ -263,14 +273,26 @@ function renderEdgeCanvas() {
   exp.countFrame();
 }
 
+// 虚实结合：画布底图始终是 CARLA 前视画面，主板只提供检测框，
+// 因此不要用主板的缩略图当底图，否则会把 CARLA 画面顶掉
+function drawHybridFront() {
+  const canvas = frontCanvas.value;
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  if (!lastFrontFrame) return;      // 还没收到 CARLA 画面，保持空状态提示
+  ctx.drawImage(lastFrontFrame, 0, 0, canvas.width, canvas.height);
+  drawEdgeBoxes(ctx, canvas.width, canvas.height);
+}
+
 function clearEdgeCanvas() {
   const canvas = frontCanvas.value;
   if (!canvas) return;
   canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
   frontHasFrame.value = false;
-  // 切回虚拟仿真时恢复 CARLA 的 800×600：边缘帧可能是 640×480 甚至 1280×720，
+  // 离开真实场景时恢复 CARLA 的 800×600：边缘帧可能是 640×480 甚至 1280×720，
   // 沿用下去会让 CARLA 画面按错误的内部分辨率绘制
-  if (exp.isSimulation) {
+  if (!exp.isRealScene) {
     canvas.width = 800;
     canvas.height = 600;
   }
@@ -307,8 +329,9 @@ function handleEdgeDetection(message) {
   // 每帧独立：这一帧没带图就把上一帧清掉，避免底图停住而框在动（看起来像"框飘了"）
   edgeThumb.value = typeof message.thumb === "string" ? message.thumb : "";
   edgeFramesThisSecond.value += 1;
-  // 等 DOM 更新（首次渲染时 canvas 可能刚被 v-if 插进来）后再画
-  nextTick(renderEdgeCanvas);
+  // 等 DOM 更新（首次渲染时 canvas 可能刚被 v-if 插进来）后再画：
+  // 真实场景用主板缩略图打底，虚实结合用 CARLA 画面打底、只叠框
+  nextTick(exp.isRealScene ? renderEdgeCanvas : drawHybridFront);
 }
 
 function handleEdgeMessage(event) {
@@ -547,11 +570,9 @@ const pendingObjectUrls = new Set();
 function drawFrame(prefix, bytes) {
   const canvas = prefix === 0 ? frontCanvas.value : rearCanvas.value;
   if (!canvas) return;
-  // 虚实结合模式下，左侧「AI 感知识别」画布改由边缘主板供图。
-  // 一旦主板开始上报，就丢弃 CARLA 的前视帧，否则两个数据源会来回抢这块画布、画面闪烁。
-  // 真实场景模式完全不接 CARLA，前视帧一律丢弃。
+  // 真实场景模式完全不接 CARLA，前视帧一律丢弃；
+  // 虚实结合与虚拟仿真一样由 CARLA 前视画面打底，主板只在上面叠检测框
   if (prefix === 0 && exp.isRealScene) return;
-  if (prefix === 0 && !exp.isSimulation && edgeDetectionData.value !== null) return;
   const context = canvas.getContext("2d");
   const objectUrl = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
   pendingObjectUrls.add(objectUrl);
@@ -561,6 +582,8 @@ function drawFrame(prefix, bytes) {
     URL.revokeObjectURL(objectUrl);
     pendingObjectUrls.delete(objectUrl);
     if (prefix === 0) {
+      lastFrontFrame = image;                      // 留给主板检测结果重画用
+      if (exp.usesEdge) drawEdgeBoxes(context, canvas.width, canvas.height);
       frontHasFrame.value = true;
       exp.countFrame();
     } else {
@@ -578,6 +601,7 @@ function drawFrame(prefix, bytes) {
 function clearFrames() {
   frontHasFrame.value = false;
   rearHasFrame.value = false;
+  lastFrontFrame = null;
   frontCanvas.value?.getContext("2d").clearRect(0, 0, 800, 600);
   rearCanvas.value?.getContext("2d").clearRect(0, 0, 800, 600);
 }
@@ -753,7 +777,7 @@ onUnmounted(() => {
       </aside>
       <main class="mainlab" :class="{ 'mainlab-split': exp.isRealScene }">
         <div class="visual-layout" :class="{ stage: exp.isRealScene }">
-          <section class="panel" :class="{ 'stage-panel': exp.isRealScene }"><div class="panel-head"><div><b>AI 感知识别</b><span v-if="exp.isRealScene" class="stage-chip" :class="{ live: frontHasFrame }"><i></i>{{ frontHasFrame ? "LIVE" : "STANDBY" }}</span></div><span>{{ exp.isSimulation ? "前视摄像头 · UFLD + YOLO" : "边缘主板 · YOLO · 实时回传" }}</span></div><div class="canvas-wrap"><canvas id="frontCanvas" ref="frontCanvas" :class="{ 'edge-source': !exp.isSimulation }" width="800" height="600"></canvas><div class="empty-state" id="frontEmpty" :class="{ hidden: frontHasFrame }"><div><b>{{ exp.isRealScene ? "等待边缘主板画面" : "等待视觉数据" }}</b>{{ exp.isRealScene ? "主板连接并开启识别后，画面与检测框会显示在这里" : "后端开始推送后显示车道线与目标检测结果" }}</div></div><div class="live-label" id="frontLive" :class="{ on: frontHasFrame }"><i></i>{{ exp.isSimulation ? "PERCEPTION" : "EDGE" }}</div></div><div v-if="exp.isRealScene" class="stage-stats"><div><span>识别模型</span><b>{{ edgeModelName || "--" }}</b></div><div><span>上报帧率</span><b>{{ edgeFps }}<small> fps</small></b></div><div><span>单帧推理</span><b>{{ edgeInferMs ? edgeInferMs : "--" }}<small> ms</small></b></div><div><span>画面分辨率</span><b>{{ edgeFrameSize.width ? `${edgeFrameSize.width}×${edgeFrameSize.height}` : "--" }}</b></div></div></section>
+          <section class="panel" :class="{ 'stage-panel': exp.isRealScene }"><div class="panel-head"><div><b>AI 感知识别</b><span v-if="exp.isRealScene" class="stage-chip" :class="{ live: frontHasFrame }"><i></i>{{ frontHasFrame ? "LIVE" : "STANDBY" }}</span></div><span>{{ exp.isSimulation ? "前视摄像头 · UFLD + YOLO" : exp.isRealScene ? "边缘主板 · YOLO · 实时回传" : "CARLA 前视画面 · 边缘主板检测" }}</span></div><div class="canvas-wrap"><canvas id="frontCanvas" ref="frontCanvas" :class="{ 'edge-source': !exp.isSimulation }" width="800" height="600"></canvas><div class="empty-state" id="frontEmpty" :class="{ hidden: frontHasFrame }"><div><b>{{ exp.isRealScene ? "等待边缘主板画面" : exp.isSimulation ? "等待视觉数据" : "等待 CARLA 画面" }}</b>{{ exp.isRealScene ? "主板连接并开启识别后，画面与检测框会显示在这里" : exp.isSimulation ? "后端开始推送后显示车道线与目标检测结果" : "创建车辆并开始行驶后，CARLA 画面与边缘检测框会显示在这里" }}</div></div><div class="live-label" id="frontLive" :class="{ on: frontHasFrame }"><i></i>{{ exp.isRealScene ? "EDGE" : "PERCEPTION" }}</div></div><div v-if="exp.isRealScene" class="stage-stats"><div><span>识别模型</span><b>{{ edgeModelName || "--" }}</b></div><div><span>上报帧率</span><b>{{ edgeFps }}<small> fps</small></b></div><div><span>单帧推理</span><b>{{ edgeInferMs ? edgeInferMs : "--" }}<small> ms</small></b></div><div><span>画面分辨率</span><b>{{ edgeFrameSize.width ? `${edgeFrameSize.width}×${edgeFrameSize.height}` : "--" }}</b></div></div></section>
           <div v-if="!exp.isRealScene" class="side-visual-stack">
             <section class="panel"><div class="panel-head"><div><b>CARLA 摄像头画面</b></div><span>第三人称 · Rear Camera</span></div><div class="canvas-wrap"><canvas id="rearCanvas" ref="rearCanvas" width="800" height="600"></canvas><div class="empty-state" id="rearEmpty" :class="{ hidden: rearHasFrame }"><div><b>等待实验启动</b>创建车辆并开始行驶后显示 CARLA 实时画面</div></div><div class="live-label" id="rearLive" :class="{ on: rearHasFrame }"><i></i>CAMERA</div></div></section>
             <div class="compact-metrics"><div class="metric"><span>车辆速度</span><b><em id="speedVal">{{ exp.telemetry.speed }}</em> <small>km/h</small></b><small>CARLA vehicle state</small></div><div class="metric"><span>加速度</span><b><em id="accelVal">{{ exp.telemetry.acceleration }}</em> <small>m/s²</small></b><small>实时状态</small></div><div class="metric"><span>油门</span><b><em id="throttleVal">{{ exp.telemetry.throttle }}</em> <small>%</small></b><small>Autopilot control</small></div><div class="metric"><span>车辆朝向</span><b><em id="yawVal">{{ exp.telemetry.yaw }}</em> <small>°</small></b><small>World yaw</small></div><div class="metric"><span>前视流帧率</span><b><em id="fpsVal">{{ exp.fps }}</em> <small>FPS</small></b><small>浏览器实测</small></div></div>
