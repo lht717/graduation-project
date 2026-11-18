@@ -1,0 +1,24 @@
+# FusionLab 后端（FastAPI + MySQL）运行必需依赖
+# 安装：python -m pip install -r requirements.txt
+
+fastapi==0.163.2
+uvicorn==0.54.0
+PyMySQL==1.2.4
+bcrypt==5.0.0
+DBUtils==3.2.0
+pydantic==2.14.3
+
+# ---------- 可选依赖（不装不影响业务网页启动） ----------
+# CARLA 仿真 / ONNX 模型推理（carla_runtime.py，缺失时自动跳过）
+# onnxruntime
+# numpy
+# opencv-python
+
+# 边缘设备板端客户端（edge_device_client.py 单独运行时才需要）
+# websockets
+# numpy
+# opencv-python
+
+# ---------- 开发/测试依赖（跑 pytest 时安装） ----------
+pytest==9.2.0
+httpx==0.28.1

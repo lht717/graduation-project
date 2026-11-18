@@ -3,17 +3,19 @@ import json
 import os
 import queue
 import hashlib
+import bcrypt
 import base64
 import secrets
 import threading
 from typing import Dict, List
 from pathlib import Path
 from datetime import datetime, timezone
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -73,12 +75,25 @@ async def _stop_edge_service() -> None:
     await edge_service.stop_service()
 
 
+def _env_origins(name: str, default: list) -> list:
+    """从环境变量读取逗号分隔的跨域来源；未配置时使用默认本地来源。"""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+CORS_ORIGINS = _env_origins(
+    "FUSIONLAB_CORS_ORIGINS",
+    ["http://127.0.0.1:8080", "http://localhost:8080"],
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -90,8 +105,6 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # CARLA / ONNX / 相机 / 推理 / 模型 API / 驾驶 WebSocket 都在 carla_runtime.py。
 # 即使没有启动 CARLA 服务（或环境缺少 carla / numpy / cv2 / onnxruntime），
 # 本文件中的用户、认证、私信、实验数据等业务接口仍可正常启动与编辑。
-import os
-
 if os.environ.get("FUSIONLAB_DISABLE_CARLA", "").lower() in ("1", "true", "yes", "on"):
     print("[CARLA] 已通过 FUSIONLAB_DISABLE_CARLA 禁用，仅运行业务后端（用户/私信/实验数据）")
 else:
@@ -103,28 +116,76 @@ else:
         print(f"[CARLA] 仿真模块未加载（业务后端不受影响）: {exc}")
 
 # ================= 用户与私信存储（MySQL） =================
+import logging
 import pymysql
+from dbutils.pooled_db import PooledDB
+
+logger = logging.getLogger("fusionlab")
+if not logger.handlers:
+    logging.basicConfig(
+        level=os.environ.get("FUSIONLAB_LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
 
 data_lock = threading.Lock()
 
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 3306,
-    "user": "root",
+    "host": os.environ.get("FUSIONLAB_DB_HOST", "127.0.0.1"),
+    "port": int(os.environ.get("FUSIONLAB_DB_PORT", "3306")),
+    "user": os.environ.get("FUSIONLAB_DB_USER", "root"),
     "password": os.environ.get("FUSIONLAB_DB_PASSWORD", "123456"),
-    "database": "fusionlab",
+    "database": os.environ.get("FUSIONLAB_DB_NAME", "fusionlab"),
     "charset": "utf8mb4",
 }
+
+_db_pool = None
+
+
+def _get_db_pool() -> PooledDB:
+    """惰性创建 MySQL 连接池；复用连接，避免每次请求重新握手。"""
+    global _db_pool
+    if _db_pool is None:
+        _db_pool = PooledDB(
+            creator=pymysql,
+            mincached=2,
+            maxcached=8,
+            maxconnections=20,
+            blocking=True,
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=False,
+            **DB_CONFIG,
+        )
+    return _db_pool
 
 
 def _now_iso():
     return datetime.now(timezone.utc).astimezone().isoformat()
 
 
+LEGACY_SALT = "fusionlab"
+
+
 def _hash_password(password: str) -> str:
-    # 演示用加盐哈希；生产环境建议换用 bcrypt/argon2
-    salt = "fusionlab"
-    return hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    """使用 bcrypt 生成慢哈希（每用户随机盐），返回可入库的字符串。"""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _is_legacy_hash(stored: str) -> bool:
+    """判断是否为旧版固定盐 SHA256 哈希（bcrypt 哈希以 $2 开头）。"""
+    return bool(stored) and not stored.startswith("$2")
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    """校验密码；兼容旧版固定盐 SHA256 哈希。"""
+    if not stored:
+        return False
+    if stored.startswith("$2"):
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), stored.encode("utf-8"))
+        except ValueError:
+            return False
+    legacy = hashlib.sha256((LEGACY_SALT + password).encode("utf-8")).hexdigest()
+    return secrets.compare_digest(legacy, stored)
 
 
 def _safe_username(username: str) -> str:
@@ -135,7 +196,7 @@ def _safe_username(username: str) -> str:
 
 
 def _db_conn():
-    return pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor, autocommit=False)
+    return _get_db_pool().connection()
 
 
 def _ensure_user_status_column() -> None:
@@ -180,20 +241,54 @@ def load_users() -> list:
         conn.close()
 
 
-def save_users(users: list) -> None:
+USER_COLUMNS = ("username", "account_id", "display_name", "role", "role_name",
+                "is_active", "password_hash", "registered_at", "avatar", "class_name")
+
+
+def _user_row(u: dict) -> tuple:
+    return (
+        u["username"], u.get("account_id", u["username"]), u["display_name"],
+        u.get("role", "user"), u.get("role_name", "普通用户"),
+        1 if u.get("is_active", True) else 0, u["password_hash"],
+        u.get("registered_at", ""), u.get("avatar", ""), u.get("class_name", ""),
+    )
+
+
+def _insert_user_db(u: dict) -> None:
     conn = _db_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM users")
-            for u in users:
-                cur.execute(
-                    "INSERT INTO users (username, account_id, display_name, role, role_name, is_active, password_hash, registered_at, avatar, class_name) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                    (u["username"], u.get("account_id", u["username"]), u["display_name"],
-                     u.get("role", "user"), u.get("role_name", "普通用户"), 1 if u.get("is_active", True) else 0,
-                     u["password_hash"], u.get("registered_at", ""), u.get("avatar", ""),
-                     u.get("class_name", "")),
-                )
+            placeholders = ", ".join(["%s"] * len(USER_COLUMNS))
+            cur.execute(
+                f"INSERT INTO users ({', '.join(USER_COLUMNS)}) VALUES ({placeholders})",
+                _user_row(u),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _update_user_db(username: str, fields: dict) -> None:
+    if not fields:
+        return
+    assignments = ", ".join(f"{column} = %s" for column in fields)
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE users SET {assignments} WHERE username = %s",
+                tuple(fields.values()) + (username,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _delete_user_db(username: str) -> None:
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM users WHERE username = %s", (username,))
         conn.commit()
     finally:
         conn.close()
@@ -221,19 +316,30 @@ def load_messages() -> list:
         conn.close()
 
 
-def save_messages(messages: list) -> None:
+def _insert_message_db(m: dict) -> int:
     conn = _db_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM messages")
-            for m in messages:
-                mid = int(str(m["id"]).split("-")[-1])
-                cur.execute(
-                    "INSERT INTO messages (id, subject, sender, sender_username, recipient, recipient_username, content, created_at) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                    (mid, m["subject"], m["sender"], m["sender_username"], m["recipient"],
-                     m["recipient_username"], m["content"], m["created_at"]),
-                )
+            cur.execute(
+                "INSERT INTO messages (subject, sender, sender_username, recipient, recipient_username, content, created_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (m["subject"], m["sender"], m["sender_username"], m["recipient"],
+                 m["recipient_username"], m["content"], m["created_at"]),
+            )
+            conn.commit()
+            return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def _delete_messages_by_user_db(username: str) -> None:
+    conn = _db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM messages WHERE sender_username = %s OR recipient_username = %s",
+                (username, username),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -247,7 +353,7 @@ if not users:
             "username": "admin", "account_id": "20240000",
             "display_name": "系统管理员", "role": "admin", "role_name": "管理员",
             "is_active": True,
-            "password_hash": _hash_password("admin123"),
+            "password_hash": _hash_password(os.environ.get("FUSIONLAB_ADMIN_PASSWORD", "admin123")),
             "registered_at": "2024-06-01T10:00:00+08:00",
             "avatar": "/static/avatar_default.png",
             "class_name": "",
@@ -256,13 +362,14 @@ if not users:
             "username": "demo", "account_id": "20240001",
             "display_name": "演示用户", "role": "user", "role_name": "普通用户",
             "is_active": True,
-            "password_hash": _hash_password("fusionlab"),
+            "password_hash": _hash_password(os.environ.get("FUSIONLAB_DEMO_PASSWORD", "fusionlab")),
             "registered_at": "2025-01-15T08:30:00+08:00",
             "avatar": "/static/avatar_default.png",
             "class_name": "计算机2401班",
         },
     ]
-    save_users(users)
+    for _u in users:
+        _insert_user_db(_u)
 
 messages = load_messages()
 next_message_id = max([int(m["id"].split("-")[-1]) for m in messages], default=0) + 1
@@ -289,31 +396,45 @@ def _current_user(request: Request) -> dict:
 def _admin_only(request: Request) -> dict:
     user = _current_user(request)
     if user["role"] != "admin":
+        logger.warning("权限拒绝：非管理员尝试访问管理接口（username=%s）", user["username"])
         raise HTTPException(status_code=403, detail="需要管理员权限")
     return user
 
 
+# ---------- 请求校验模型 ----------
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
 # ---------- 认证 API ----------
 @app.post("/api/auth/login")
-async def login(request: Request):
-    body = await request.json()
-    username = _safe_username(body.get("username", ""))
-    password = str(body.get("password", ""))
+def login(request: Request, body: LoginRequest):
+    username = _safe_username(body.username)
+    password = body.password
     if not password:
         raise HTTPException(status_code=400, detail="请输入账号和密码")
     user = next((u for u in users if u["username"] == username), None)
-    if not user or user["password_hash"] != _hash_password(password):
+    if not user or not _verify_password(password, user["password_hash"]):
+        logger.warning("登录失败：账号或密码错误（username=%s）", username)
         raise HTTPException(status_code=401, detail="账号或密码错误")
     if not user.get("is_active", True):
+        logger.warning("登录失败：账号已停用（username=%s）", username)
         raise HTTPException(status_code=403, detail="账号已停用，请联系管理员")
+    # 旧版固定盐 SHA256 哈希的用户，登录成功后自动升级为 bcrypt 哈希
+    if _is_legacy_hash(user["password_hash"]):
+        with data_lock:
+            user["password_hash"] = _hash_password(password)
+            _update_user_db(user["username"], {"password_hash": user["password_hash"]})
     token = secrets.token_hex(16)
     with data_lock:
         auth_sessions[token] = user["username"]
+    logger.info("登录成功：%s（role=%s）", username, user["role"])
     return {"authenticated": True, "user": _public_user(user), "token": token}
 
 
 @app.get("/api/auth/me")
-async def auth_me(request: Request):
+def auth_me(request: Request):
     try:
         user = _current_user(request)
     except HTTPException:
@@ -322,7 +443,7 @@ async def auth_me(request: Request):
 
 
 @app.post("/api/auth/logout")
-async def logout(request: Request):
+def logout(request: Request):
     auth = request.headers.get("Authorization", "")
     token = auth[7:].strip() if auth.startswith("Bearer ") else ""
     with data_lock:
@@ -332,9 +453,8 @@ async def logout(request: Request):
 
 # ---------- 个人资料 API ----------
 @app.post("/api/users/me/display-name")
-async def update_display_name(request: Request):
+def update_display_name(request: Request, body: dict = Body(...)):
     user = _current_user(request)
-    body = await request.json()
     display_name = str(body.get("display_name", "")).strip()
     if not display_name:
         raise HTTPException(status_code=400, detail="自定义名称不能为空")
@@ -342,15 +462,14 @@ async def update_display_name(request: Request):
         raise HTTPException(status_code=400, detail="自定义名称不能超过 40 字")
     with data_lock:
         user["display_name"] = display_name
-        save_users(users)
+        _update_user_db(user["username"], {"display_name": display_name})
     return {"user": _public_user(user), "message": "自定义名称修改成功"}
 
 
 @app.post("/api/users/me/avatar")
-async def update_avatar(request: Request):
+def update_avatar(request: Request, body: dict = Body(...)):
     """更新当前用户头像。支持 data:image/... base64 图片（保存为 static/avatars/<username>.png），或 /static/、http(s) 图片地址。"""
     user = _current_user(request)
-    body = await request.json()
     data = str(body.get("avatar", "") or body.get("image", "")).strip()
     if not data:
         raise HTTPException(status_code=400, detail="请提供头像图片")
@@ -375,40 +494,38 @@ async def update_avatar(request: Request):
         raise HTTPException(status_code=400, detail="头像地址过长")
     with data_lock:
         user["avatar"] = url
-        save_users(users)
+        _update_user_db(user["username"], {"avatar": url})
     return {"user": _public_user(user), "message": "头像已更新"}
 
 
 @app.post("/api/users/me/password")
-async def change_password(request: Request):
+def change_password(request: Request, body: dict = Body(...)):
     user = _current_user(request)
-    body = await request.json()
     current_password = str(body.get("current_password", ""))
     new_password = str(body.get("new_password", ""))
     if not current_password or not new_password:
         raise HTTPException(status_code=400, detail="请填写当前密码和新密码")
     if len(new_password) < 8:
         raise HTTPException(status_code=400, detail="新密码至少需要 8 位")
-    if user["password_hash"] != _hash_password(current_password):
+    if not _verify_password(current_password, user["password_hash"]):
         raise HTTPException(status_code=400, detail="当前密码不正确")
     with data_lock:
         user["password_hash"] = _hash_password(new_password)
-        save_users(users)
+        _update_user_db(user["username"], {"password_hash": user["password_hash"]})
     return {"message": "密码修改成功"}
 
 
 # ---------- 管理员用户管理 API ----------
 @app.get("/api/admin/users")
-async def admin_list_users(request: Request):
+def admin_list_users(request: Request):
     _admin_only(request)
     with data_lock:
         return {"users": [_public_user(u) for u in users]}
 
 
 @app.post("/api/admin/users")
-async def admin_create_user(request: Request):
+def admin_create_user(request: Request, body: dict = Body(...)):
     _admin_only(request)
-    body = await request.json()
     username = _safe_username(body.get("username", ""))
     display_name = str(body.get("display_name", "")).strip()
     password = str(body.get("password", ""))
@@ -435,22 +552,15 @@ async def admin_create_user(request: Request):
             "class_name": class_name,
         }
         users.append(new_user)
-        save_users(users)
+        _insert_user_db(new_user)
     return {"user": _public_user(new_user), "message": "用户创建成功"}
 
 
 @app.post("/api/admin/users/password/reset")
-async def admin_reset_password(request: Request):
+def admin_reset_password(request: Request, body: dict = Body(...)):
+    """管理员重置指定用户密码：请求体 {username, new_password}。"""
     _admin_only(request)
-    body = await request.json()
     username = _safe_username(body.get("username", ""))
-    return {"message": f"已提交 {username} 的密码重置请求"}
-
-
-@app.put("/api/admin/users/{username}/password")
-async def admin_set_password(username: str, request: Request):
-    _admin_only(request)
-    body = await request.json()
     new_password = str(body.get("new_password", ""))
     if len(new_password) < 8:
         raise HTTPException(status_code=400, detail="新密码至少需要 8 位")
@@ -458,15 +568,29 @@ async def admin_set_password(username: str, request: Request):
         for user in users:
             if user["username"] == username:
                 user["password_hash"] = _hash_password(new_password)
-                save_users(users)
+                _update_user_db(user["username"], {"password_hash": user["password_hash"]})
+                return {"message": f"用户 {username} 的密码已重置"}
+    raise HTTPException(status_code=404, detail="用户不存在")
+
+
+@app.put("/api/admin/users/{username}/password")
+def admin_set_password(username: str, request: Request, body: dict = Body(...)):
+    _admin_only(request)
+    new_password = str(body.get("new_password", ""))
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="新密码至少需要 8 位")
+    with data_lock:
+        for user in users:
+            if user["username"] == username:
+                user["password_hash"] = _hash_password(new_password)
+                _update_user_db(user["username"], {"password_hash": user["password_hash"]})
                 return {"message": "用户密码修改成功"}
     raise HTTPException(status_code=404, detail="用户不存在")
 
 
 @app.patch("/api/admin/users/{username}")
-async def admin_update_user(username: str, request: Request):
+def admin_update_user(username: str, request: Request, body: dict = Body(...)):
     _admin_only(request)
-    body = await request.json()
     display_name = str(body.get("display_name", "") or "").strip()
     class_given = "class_name" in body
     class_name = str(body.get("class_name", "") or "").strip()[:64]
@@ -477,17 +601,20 @@ async def admin_update_user(username: str, request: Request):
     with data_lock:
         for user in users:
             if user["username"] == username:
+                fields = {}
                 if display_name:
                     user["display_name"] = display_name
+                    fields["display_name"] = display_name
                 if class_given:
                     user["class_name"] = class_name
-                save_users(users)
+                    fields["class_name"] = class_name
+                _update_user_db(username, fields)
                 return {"user": _public_user(user), "message": "用户信息已更新"}
     raise HTTPException(status_code=404, detail="用户不存在")
 
 
 @app.put("/api/admin/users/{username}/role")
-async def admin_promote_user(username: str, request: Request):
+def admin_promote_user(username: str, request: Request):
     _admin_only(request)
     with data_lock:
         user = next((item for item in users if item["username"] == username), None)
@@ -500,7 +627,7 @@ async def admin_promote_user(username: str, request: Request):
         user["role"] = "admin"
         user["role_name"] = "管理员"
         try:
-            save_users(users)
+            _update_user_db(username, {"role": "admin", "role_name": "管理员"})
         except Exception:
             user["role"] = previous_role
             user["role_name"] = previous_role_name
@@ -509,9 +636,8 @@ async def admin_promote_user(username: str, request: Request):
 
 
 @app.put("/api/admin/users/{username}/status")
-async def admin_set_user_status(username: str, request: Request):
+def admin_set_user_status(username: str, request: Request, body: dict = Body(...)):
     acting_user = _admin_only(request)
-    body = await request.json()
     is_active = body.get("is_active")
     if not isinstance(is_active, bool):
         raise HTTPException(status_code=400, detail="账号状态必须为布尔值")
@@ -533,7 +659,7 @@ async def admin_set_user_status(username: str, request: Request):
         previous_status = target.get("is_active", True)
         target["is_active"] = is_active
         try:
-            save_users(users)
+            _update_user_db(username, {"is_active": 1 if is_active else 0})
         except Exception:
             target["is_active"] = previous_status
             raise
@@ -544,7 +670,7 @@ async def admin_set_user_status(username: str, request: Request):
 
 
 @app.delete("/api/admin/users/{username}")
-async def admin_delete_user(username: str, request: Request):
+def admin_delete_user(username: str, request: Request):
     _admin_only(request)
     with data_lock:
         for i, user in enumerate(users):
@@ -552,11 +678,11 @@ async def admin_delete_user(username: str, request: Request):
                 if user["role"] == "admin":
                     raise HTTPException(status_code=400, detail="不能删除管理员账号")
                 users.pop(i)
-                save_users(users)
+                _delete_user_db(username)
                 # 同步清理该用户相关的私信
                 messages[:] = [m for m in messages
                                 if m["sender_username"] != username and m["recipient_username"] != username]
-                save_messages(messages)
+                _delete_messages_by_user_db(username)
                 return {"success": True, "message": "用户已删除"}
     raise HTTPException(status_code=404, detail="用户不存在")
 
@@ -677,7 +803,7 @@ def _class_by_id(cur, class_id: int) -> dict:
 
 
 @app.get("/api/admin/classes")
-async def admin_list_classes(request: Request, keyword: str = "", grade: str = ""):
+def admin_list_classes(request: Request, keyword: str = "", grade: str = ""):
     _admin_only(request)
     clauses = []
     params = []
@@ -705,9 +831,9 @@ async def admin_list_classes(request: Request, keyword: str = "", grade: str = "
 
 
 @app.post("/api/admin/classes")
-async def admin_create_class(request: Request):
+def admin_create_class(request: Request, body: dict = Body(...)):
     _admin_only(request)
-    values = _class_values(await request.json())
+    values = _class_values(body)
     if not values["name"] or not values["grade"]:
         raise HTTPException(status_code=400, detail="班级名称和年级不能为空")
     if len(values["name"]) > 128 or len(values["grade"]) > 32 or len(values["remark"]) > 500:
@@ -730,14 +856,13 @@ async def admin_create_class(request: Request):
 
 
 @app.put("/api/admin/classes/{class_id}")
-async def admin_update_class(class_id: int, request: Request):
+def admin_update_class(class_id: int, request: Request, body: dict = Body(...)):
     _admin_only(request)
-    body = await request.json()
     message = "班级信息已更新"
     conn = _db_conn()
     try:
         # 改名要同时改 users 表和内存缓存；与用户相关接口共用 data_lock，
-        # 避免 save_users() 用旧缓存把刚改好的所属班级覆盖回数据库。
+        # 避免旧缓存把刚改好的所属班级覆盖回数据库。
         with data_lock:
             with conn.cursor() as cur:
                 row = _class_by_id(cur, class_id)
@@ -782,7 +907,7 @@ async def admin_update_class(class_id: int, request: Request):
 
 
 @app.delete("/api/admin/classes/{class_id}")
-async def admin_delete_class(class_id: int, request: Request):
+def admin_delete_class(class_id: int, request: Request):
     _admin_only(request)
     conn = _db_conn()
     try:
@@ -891,7 +1016,7 @@ def _assert_type_name_available(cur, name: str, exclude_id: int = 0) -> None:
 
 
 @app.get("/api/experiment-types")
-async def list_experiment_types(request: Request):
+def list_experiment_types(request: Request):
     """实验中心页读取实验类型卡片：与「实验类型」管理页共用同一张表。"""
     _current_user(request)
     conn = _db_conn()
@@ -908,7 +1033,7 @@ async def list_experiment_types(request: Request):
 
 
 @app.get("/api/admin/experiment-types")
-async def admin_list_experiment_types(request: Request):
+def admin_list_experiment_types(request: Request):
     _admin_only(request)
     conn = _db_conn()
     try:
@@ -924,9 +1049,9 @@ async def admin_list_experiment_types(request: Request):
 
 
 @app.post("/api/admin/experiment-types")
-async def admin_create_experiment_type(request: Request):
+def admin_create_experiment_type(request: Request, body: dict = Body(...)):
     _admin_only(request)
-    values = _experiment_type_values(await request.json())
+    values = _experiment_type_values(body)
     _validate_experiment_type(values)
     conn = _db_conn()
     try:
@@ -946,9 +1071,8 @@ async def admin_create_experiment_type(request: Request):
 
 
 @app.put("/api/admin/experiment-types/{type_id}")
-async def admin_update_experiment_type(type_id: int, request: Request):
+def admin_update_experiment_type(type_id: int, request: Request, body: dict = Body(...)):
     _admin_only(request)
-    body = await request.json()
     conn = _db_conn()
     try:
         with conn.cursor() as cur:
@@ -971,7 +1095,7 @@ async def admin_update_experiment_type(type_id: int, request: Request):
 
 
 @app.delete("/api/admin/experiment-types/{type_id}")
-async def admin_delete_experiment_type(type_id: int, request: Request):
+def admin_delete_experiment_type(type_id: int, request: Request):
     _admin_only(request)
     conn = _db_conn()
     try:
@@ -1166,7 +1290,7 @@ _ensure_experiment_operator_username_column()
 
 
 @app.get("/api/admin/experiments")
-async def admin_list_experiments(request: Request, keyword: str = "", experiment_type: str = ""):
+def admin_list_experiments(request: Request, keyword: str = "", experiment_type: str = ""):
     _admin_only(request)
     conn = _db_conn()
     try:
@@ -1202,7 +1326,7 @@ async def admin_list_experiments(request: Request, keyword: str = "", experiment
 
 
 @app.get("/api/users/me/experiments")
-async def user_experiment_summary(request: Request):
+def user_experiment_summary(request: Request):
     user = _current_user(request)
     conn = _db_conn()
     try:
@@ -1248,9 +1372,8 @@ async def user_experiment_summary(request: Request):
 
 
 @app.post("/api/admin/experiments")
-async def admin_create_experiment(request: Request):
+def admin_create_experiment(request: Request, body: dict = Body(...)):
     _admin_only(request)
-    body = await request.json()
     values = _experiment_values(body)
     if not values["name"]:
         raise HTTPException(status_code=400, detail="实验名称不能为空")
@@ -1279,14 +1402,13 @@ async def admin_create_experiment(request: Request):
 
 
 @app.post("/api/experiments")
-async def save_experiment_record(request: Request):
+def save_experiment_record(request: Request, body: dict = Body(...)):
     """实验结束后保存运行记录：登录用户（普通用户/管理员）均可写入。
 
     请求体字段：name、duration_seconds、speed、acceleration、throttle、yaw、front_fps。
     name 为空时按「用户名 + 时间」自动生成。
     """
     user = _current_user(request)
-    body = await request.json()
     values = _experiment_values(body)
     values["operator_name"] = str(user.get("display_name") or user["username"]).strip()
     values["operator_username"] = user["username"]
@@ -1310,9 +1432,8 @@ async def save_experiment_record(request: Request):
 
 
 @app.put("/api/admin/experiments/{exp_id}")
-async def admin_update_experiment(exp_id: int, request: Request):
+def admin_update_experiment(exp_id: int, request: Request, body: dict = Body(...)):
     _admin_only(request)
-    body = await request.json()
     conn = _db_conn()
     try:
         with conn.cursor() as cur:
@@ -1343,7 +1464,7 @@ async def admin_update_experiment(exp_id: int, request: Request):
 
 
 @app.delete("/api/admin/experiments/{exp_id}")
-async def admin_delete_experiment(exp_id: int, request: Request):
+def admin_delete_experiment(exp_id: int, request: Request):
     _admin_only(request)
     conn = _db_conn()
     try:
@@ -1359,9 +1480,8 @@ async def admin_delete_experiment(exp_id: int, request: Request):
 
 
 @app.put("/api/admin/experiments/{exp_id}/status")
-async def admin_set_experiment_status(exp_id: int, request: Request):
+def admin_set_experiment_status(exp_id: int, request: Request, body: dict = Body(...)):
     _admin_only(request)
-    body = await request.json()
     is_active = bool(body.get("is_active"))
     conn = _db_conn()
     try:
@@ -1385,7 +1505,7 @@ async def admin_set_experiment_status(exp_id: int, request: Request):
 
 # ---------- 私信 API ----------
 @app.get("/api/messages")
-async def list_messages(request: Request):
+def list_messages(request: Request):
     user = _current_user(request)
     is_admin = user["role"] == "admin"
     with data_lock:
@@ -1409,10 +1529,9 @@ async def list_messages(request: Request):
 
 
 @app.post("/api/messages")
-async def send_message(request: Request):
+def send_message(request: Request, body: dict = Body(...)):
     global next_message_id
     user = _current_user(request)
-    body = await request.json()
     recipient = str(body.get("recipient", body.get("recipient_username", ""))).strip()
     content = str(body.get("content", "")).strip()
     if not recipient or not content:
@@ -1437,15 +1556,16 @@ async def send_message(request: Request):
         "created_at": _now_iso(),
     }
     with data_lock:
-        next_message_id += 1
+        new_id = _insert_message_db(message)
+        message["id"] = f"msg-{new_id}"
+        next_message_id = max(next_message_id, new_id + 1)
         messages.append(message)
-        save_messages(messages)
     return {"message": message}
 
 
 # ---------- 静态文件服务 ----------
 @app.get("/")
-async def get():
+def get():
     return FileResponse(str(STATIC_DIR / "index.html"), headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
 
 # 将 static 目录挂载到根路径：前端用相对路径引用 /js/*、/config.js 等资源，
