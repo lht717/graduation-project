@@ -14,6 +14,12 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true, // 允许局域网内其他电脑访问开发页面
+    // 3DGS 排序 worker 共享内存依赖跨源隔离（viewer 集成，见 viewer/INTEGRATION.md 5.3；
+    // 生产环境 FastAPI 托管时主站后端也要返回这两个头）
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
     // 开发模式下 /api、/static 与 /ws 转发到本机后端（生产模式由 FastAPI 直接托管，无需代理）
     // /static 必须代理：头像等资源都由后端提供，否则开发页面上头像会 404
     proxy: {

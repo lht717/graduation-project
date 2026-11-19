@@ -7,6 +7,7 @@ import WorkspaceView from "@/views/WorkspaceView.vue";
 import ProfileView from "@/views/ProfileView.vue";
 import MessageView from "@/views/MessageView.vue";
 import AdminView from "@/views/AdminView.vue";
+import VisualizationView from "@/threeDgs/reference/VisualizationView.vue";
 
 // 与原版 routes 集合一一对应
 export const ROUTE_NAMES = ["home", "dashboard", "workspace", "profile", "message", "admin"];
@@ -19,6 +20,8 @@ const routes = [
   { path: "/profile", name: "profile", component: ProfileView, meta: { requiresAuth: true } },
   { path: "/message", name: "message", component: MessageView, meta: { requiresAuth: true } },
   { path: "/admin", name: "admin", component: AdminView, meta: { requiresAuth: true, requiresAdmin: true } },
+  // 3D 可视化页（viewer 集成测试路由；正式版加 meta: { requiresAuth: true }）
+  { path: "/visualization", name: "visualization", component: VisualizationView },
   { path: "/:pathMatch(.*)*", redirect: "/home" }
 ];
 
