@@ -77,7 +77,8 @@ const loadById = async (modelId) => {
 </script>
 
 <style scoped>
-.viz-page { display: flex; height: 100%; }
+/* 平台 .app 只有 min-height:100vh，height:100% 会塌缩；用 min-height 兜底填满顶栏以下区域 */
+.viz-page { display: flex; height: 100%; min-height: calc(100vh - 68px); }
 .viz-sidebar {
   width: 260px;
   padding: 16px;
