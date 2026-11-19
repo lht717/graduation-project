@@ -20,8 +20,10 @@ const routes = [
   { path: "/profile", name: "profile", component: ProfileView, meta: { requiresAuth: true } },
   { path: "/message", name: "message", component: MessageView, meta: { requiresAuth: true } },
   { path: "/admin", name: "admin", component: AdminView, meta: { requiresAuth: true, requiresAdmin: true } },
-  // 3D 可视化页（viewer 集成；需登录，未登录点击会被守卫拦回首页并弹登录框）
-  { path: "/visualization", name: "visualization", component: VisualizationView, meta: { requiresAuth: true } },
+  // 3D 可视化页（viewer 集成）。
+  // 注意：录制演示阶段临时去掉 requiresAuth 以便直接访问；
+  // 答辩演示（后端就绪）时恢复 meta: { requiresAuth: true } 展示完整登录流。
+  { path: "/visualization", name: "visualization", component: VisualizationView },
   { path: "/:pathMatch(.*)*", redirect: "/home" }
 ];
 
