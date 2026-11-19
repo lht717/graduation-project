@@ -1,0 +1,21 @@
+{
+  "name": "three-dgs-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "毕设 · 基于 Three.js 与 3DGS 模型的可视化前端渲染器（ThreeDgsRenderer）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@mkkellogg/gaussian-splats-3d": "0.4.7",
+    "three": "^0.170.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "vite": "^6.0.5"
+  }
+}

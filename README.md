@@ -101,11 +101,11 @@ graduation-project/
 ## 当前进度
 
 - [x] 协作仓库建立
-- [x] 平台前端完成模型可视化页面骨架（VisualizationView.vue，渲染器占位）
-- [ ] 3D 可视化渲染器开发（ThreeDgsRenderer）
-- [ ] 后端 API 定稿（/api/models/:id 字段对齐）
-- [ ] .ply 样例模型到位
-- [ ] 平台前端代码合入本仓库
+- [x] 平台前端代码合入本仓库（frontend/，Vue 3 版）
+- [x] 3D 可视化渲染器开发（viewer/ 目录，需求 7 项全部完成：3DGS 渲染 / 相机交互 / 多模型切换 / 流式加载 / 信息面板与点击拾取 / glTF 共存 / 性能优化；详见 viewer/INTEGRATION.md）
+- [x] .ply 样例模型到位（大文件不入库，走文件服务器共享）
+- [~] 模型可视化页面 VisualizationView.vue：viewer 已提供参考实现与 provide/inject 契约（viewer/src/reference/ + viewer/src/composables/），待林晶晶并入 frontend/ 并注册路由
+- [ ] 后端 API 定稿（/api/models/:id 字段对齐，约定字段见 viewer/INTEGRATION.md 第 4 节）
 
 ## 待对齐事项
 
