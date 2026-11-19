@@ -27,6 +27,7 @@ const liveUnread = computed(() => auth.unreadTick > 0 && auth.hasUnread);
     <nav class="nav app-nav" aria-label="主导航">
       <AppLink :class="{ 'app-nav-active': active === 'home' }" route="home" :aria-current="active === 'home' ? 'page' : null">首页</AppLink>
       <AppLink :class="{ 'app-nav-active': active === 'dashboard' }" route="dashboard" :aria-current="active === 'dashboard' ? 'page' : null">实验中心</AppLink>
+      <AppLink :class="{ 'app-nav-active': active === 'visualization' }" route="visualization" :aria-current="active === 'visualization' ? 'page' : null">3D 可视化</AppLink>
       <AppLink :class="{ 'app-nav-active': active === 'profile' }" route="profile" :aria-current="active === 'profile' ? 'page' : null">个人中心</AppLink>
       <AppLink
         route="message"
