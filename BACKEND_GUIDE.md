@@ -48,18 +48,24 @@ mysql -u root -p < schema.sql
 
 ### 4. 启动后端
 
+后端运行在独立 conda 环境 `fusionlab`（Python 3.12，与 CARLA 的 `carla` 环境隔离）。
+
+方式一：双击项目根目录的 `start_backend.bat`（自动使用正确的解释器）。
+
+方式二：命令行启动：
+
 ```powershell
-python main.py
+C:\ProgramData\anaconda3\envs\fusionlab\python.exe main.py
 ```
 
 监听 `0.0.0.0:8080`，浏览器访问 `http://127.0.0.1:8080/`。
 
-> 注意：网站不能用双击 HTML（`file://`）方式打开，必须由后端服务提供静态资源。
+> 注意：网站不能用双击 HTML（`file://`）方式打开，必须由后端服务提供静态资源；也不要在 Anaconda 的 `carla` 环境（Python 3.7）里启动后端，该环境缺少 bcrypt、DBUtils 等依赖。
 
 ### 5. 运行测试
 
 ```powershell
-python -m pytest tests/ -v
+C:\ProgramData\anaconda3\envs\fusionlab\python.exe -m pytest tests/ -v
 ```
 
 ## 三、文件职责
