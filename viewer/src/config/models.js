@@ -7,9 +7,12 @@
  * progressive：流式加载（边下载边显示，大文件建议 true）。
  * 集成进主网站后，path 可改为绝对地址（如 http://... 或 /static/viewer/models/xxx.ply）。
  */
+// 路径用 BASE_URL 前缀：适配主站 base: './' 时构建产物可放任意子目录托管
+const MODEL_BASE = import.meta.env.BASE_URL + 'models/'
+
 export const MODELS = [
-  { id: 'doll', name: '玩偶（老师提供）', path: '/models/export.ply', size: '36.8 MB', progressive: true },
-  { id: 'point-cloud', name: '点云场景（老师提供）', path: '/models/point_cloud.ply', size: '141.9 MB', progressive: true },
+  { id: 'doll', name: '玩偶（老师提供）', path: MODEL_BASE + 'export.ply', size: '36.8 MB', progressive: true },
+  { id: 'point-cloud', name: '点云场景（老师提供）', path: MODEL_BASE + 'point_cloud.ply', size: '141.9 MB', progressive: true },
 ]
 
 /**
@@ -29,7 +32,7 @@ export const GLTF_MODELS = [
   {
     id: 'ferrari',
     name: '法拉利跑车（glTF）',
-    path: '/models/gltf/ferrari.glb',
+    path: MODEL_BASE + 'gltf/ferrari.glb',
     flipY: true,
     // position: [0, 0, 0], // 调好满意后把数值写回这里固定
     scale: 1,
