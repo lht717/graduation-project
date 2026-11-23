@@ -50,3 +50,6 @@ __pycache__/
 static/avatars/
 # 拆分 CARLA 模块前的单文件本地备份
 main.py.carla_backup
+
+# ===== 运行时日志目录 =====
+logs/

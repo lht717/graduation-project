@@ -1,12 +1,23 @@
 <script setup>
+import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth.js";
 
 defineOptions({ name: "LandingView" });
 
+const router = useRouter();
 const auth = useAuthStore();
 
 function scrollToCapabilities() {
   document.querySelector("#capabilities").scrollIntoView({ behavior: "smooth" });
+}
+
+// 已登录直接进入实验中心；未登录弹登录框
+function enterLab() {
+  if (auth.authenticated) {
+    router.push({ name: "dashboard" });
+  } else {
+    auth.openLogin();
+  }
 }
 </script>
 
@@ -19,7 +30,7 @@ function scrollToCapabilities() {
           <h1>让 AI 算法在<span>工程场景</span><br>完成感知与控制闭环</h1>
           <p>FusionLab 面向人工智能工程实践，将 CARLA 仿真、AI 视觉算法、边缘计算与浏览器实验工作台整合在一起，支持从虚拟仿真逐步扩展到虚实结合实验。</p>
           <div class="hero-actions">
-            <button class="btn btn-primary" id="heroEnter" @click="auth.openLogin()">开始探索 <span>→</span></button>
+            <button class="btn btn-primary" id="heroEnter" @click="enterLab">开始探索 <span>→</span></button>
             <button class="btn btn-soft" id="scrollCapabilities" @click="scrollToCapabilities">了解平台 <span>↓</span></button>
           </div>
           <div class="hero-note">
@@ -73,7 +84,7 @@ function scrollToCapabilities() {
       </section>
       <section class="landing-cta">
         <p>准备好开始你的下一次实验了吗？</p>
-        <button class="btn btn-primary" @click="auth.openLogin()">进入实验室 <span>→</span></button>
+        <button class="btn btn-primary" @click="enterLab">进入实验室 <span>→</span></button>
       </section>
     </main>
     <footer class="landing-footer">

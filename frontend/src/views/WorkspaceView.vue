@@ -64,6 +64,12 @@ function loadRecentEdgeDevices() {
   }
 }
 
+// 把服务端时间（YYYY-MM-DD HH:MM:SS）转成时间戳，解析失败返回 0
+function parseServerTime(text) {
+  if (!text) return 0;
+  return new Date(String(text).replace(" ", "T")).getTime() || 0;
+}
+
 function rememberEdgeDevices(list) {
   if (!Array.isArray(list) || !list.length) return;
   const now = Date.now();
@@ -79,7 +85,8 @@ function rememberEdgeDevices(list) {
       vendor: dev.vendor || prev.vendor || "",
       memory: dev.model || prev.memory || "",
       deviceNo: dev.device_no || prev.deviceNo || "",
-      lastSeen: now
+      // 优先用服务端记录的最近上线时间（历史记录），没有则取当前时间
+      lastSeen: parseServerTime(dev.last_online) || Math.max(prev.lastSeen || 0, now)
     });
   }
   // 最多保留 8 条，按最近连接时间倒序
@@ -366,6 +373,10 @@ function handleEdgeMessage(event) {
   // 服务端在握手完成后会立刻推一份全量设备快照
   if (message.type === "device_list") {
     applyEdgeDevices(message.devices);
+    // 合并服务端持久化的「最近连接过的设备」历史（重启后端也不丢）
+    if (Array.isArray(message.recent_devices) && message.recent_devices.length) {
+      rememberEdgeDevices(message.recent_devices);
+    }
     exp.log(`边缘设备快照：在线 ${edgeDevices.value.length} 台`, edgeDevices.value.length ? "ok" : "warn");
     return;
   }

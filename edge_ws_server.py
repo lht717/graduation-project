@@ -61,6 +61,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set
 
 import uvicorn
@@ -90,6 +91,9 @@ class Config:
     snapshot_limit: int = 50                  # 设备断开时写入日志的检测条数上限
     log_file: Optional[str] = "logs/edge_ws_server.log"
     log_level: str = "INFO"
+    # 设备上线/离线历史（本地 JSON，重启后仍能展示「最近连接过的设备」）
+    history_file: str = "logs/edge_devices_history.json"
+    history_limit: int = 50                   # 最多保留多少台设备的历史
 
     # ---- 可选的 MySQL 持久化（毕设扩展项，默认关闭，不影响主链路）----
     mysql_enabled: bool = False
@@ -627,9 +631,14 @@ class ConnectionManager:
         removed = await self.unregister_device(conn.device_id, conn.websocket)
         if removed and notify:
             await self.broadcast_device_offline(removed, reason or "closed")
+        elif removed:
+            # notify=False（发送失败踢掉）也要落历史，否则该设备会一直显示「在线」
+            HISTORY.record_offline(removed.device_id, reason or "closed",
+                                   removed.message_count, removed.detection_count)
 
     # ---------------- 业务广播 ----------------
     async def broadcast_device_online(self, conn: DeviceConn) -> None:
+        HISTORY.record_online(conn)
         await self.broadcast({
             "type": "device_online",
             "device_id": conn.device_id,
@@ -639,6 +648,7 @@ class ConnectionManager:
         })
 
     async def broadcast_device_offline(self, conn: DeviceConn, reason: str) -> None:
+        HISTORY.record_offline(conn.device_id, reason, conn.message_count, conn.detection_count)
         await self.broadcast({
             "type": "device_offline",
             "device_id": conn.device_id,
@@ -650,6 +660,96 @@ class ConnectionManager:
 
 MANAGER = ConnectionManager()
 START_TIME = time.time()
+
+
+# ---------------------------------------------------------------------------
+# 设备上线/离线历史（本地 JSON 持久化，不依赖数据库）
+# 目的：连接池只存「当前在线」的设备，后端一重启记录就没了；
+# 这里把每台设备最近一次上线/离线写到 JSON 文件，重启后前端仍能展示
+# 「最近连接过的设备」，同一 device_id 反复上下线只更新同一条记录。
+# ---------------------------------------------------------------------------
+
+
+class DeviceHistory:
+    """按 device_id 记录设备最近一次连接信息的本地 JSON 存储。"""
+
+    def __init__(self, path: str, limit: int = 50) -> None:
+        self.path = Path(path)
+        self.limit = max(1, int(limit))
+        self.records: Dict[str, Dict[str, Any]] = {}
+        self._load()
+
+    # ---------------- 读写 ----------------
+    def _load(self) -> None:
+        if not self.path.exists():
+            return
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            items = data if isinstance(data, list) else data.get("devices", [])
+            for item in items:
+                if isinstance(item, dict) and item.get("device_id"):
+                    self.records[item["device_id"]] = item
+        except Exception as exc:  # noqa: BLE001 - 历史文件坏了不能影响主服务
+            logger.warning("设备历史记录加载失败，已重置：%s", exc)
+            self.records = {}
+
+    def _save(self) -> None:
+        """按最近上线时间倒序截断后原子写盘（先写临时文件再替换）。"""
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            ordered = sorted(
+                self.records.values(),
+                key=lambda r: str(r.get("last_online", "")),
+                reverse=True,
+            )[: self.limit]
+            tmp = self.path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(ordered, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp.replace(self.path)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("设备历史记录写入失败：%s", exc)
+
+    # ---------------- 记录事件 ----------------
+    def record_online(self, conn: "DeviceConn") -> None:
+        rec = self.records.setdefault(conn.device_id, {"device_id": conn.device_id})
+        rec.update({
+            "device_id": conn.device_id,
+            "name": conn.name or conn.device_id,
+            "vendor": conn.vendor,
+            "model": conn.model,
+            "device_no": conn.device_no,
+            "remote_addr": conn.remote_addr,
+            "last_online": now_str(),
+            "last_offline": "",
+            "last_offline_reason": "",
+            "online": True,
+        })
+        self._save()
+
+    def record_offline(self, device_id: str, reason: str = "",
+                       message_count: int = 0, detection_count: int = 0) -> None:
+        rec = self.records.get(device_id)
+        if rec is None:          # 从未成功上线的设备无需记录离线
+            return
+        rec.update({
+            "online": False,
+            "last_offline": now_str(),
+            "last_offline_reason": reason or "-",
+            "message_count": int(message_count),
+            "detection_count": int(detection_count),
+        })
+        self._save()
+
+    # ---------------- 查询 ----------------
+    def recent(self) -> List[Dict[str, Any]]:
+        """按最近上线时间倒序返回全部历史记录（前端展示「最近连接过的设备」）。"""
+        return sorted(
+            self.records.values(),
+            key=lambda r: str(r.get("last_online", "")),
+            reverse=True,
+        )
+
+
+HISTORY = DeviceHistory(CFG.history_file, CFG.history_limit)
 
 
 # ---------------------------------------------------------------------------
@@ -1114,6 +1214,7 @@ async def handle_panel_ws(websocket: WebSocket) -> None:
     await MANAGER.safe_send(websocket, dash.send_lock, {
         "type": "device_list",
         "devices": MANAGER.device_list(),
+        "recent_devices": HISTORY.recent(),
         "stats": MANAGER.stats(),
         "commands": sorted(ALLOWED_COMMANDS),
         "timestamp": now_iso(),
@@ -1156,8 +1257,9 @@ async def health_impl() -> Dict[str, Any]:
 
 
 async def api_devices_impl() -> Dict[str, Any]:
-    """查询当前在线设备列表（前端轮询 / 调试用）。"""
-    return {"devices": MANAGER.device_list(), "stats": MANAGER.stats()}
+    """查询当前在线设备列表 + 最近连接过的设备历史（前端轮询 / 调试用）。"""
+    return {"devices": MANAGER.device_list(), "recent_devices": HISTORY.recent(),
+            "stats": MANAGER.stats()}
 
 
 async def api_command_impl(req: CommandRequest) -> Dict[str, Any]:
